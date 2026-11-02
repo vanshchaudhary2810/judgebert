@@ -19,5 +19,5 @@ if __name__ == "__main__":
     a = ap.parse_args()
     cfg = Config(model_name=a.model, output_dir=a.out, run_neural_baselines=not a.no_neural_baselines)
     if a.fast:
-        cfg.seeds, cfg.epochs = [42], 8
+        cfg.seeds, cfg.epochs = [42], 12
     Runner(cfg, human_csv=a.human_csv).run_all()

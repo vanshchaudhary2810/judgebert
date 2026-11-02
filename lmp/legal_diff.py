@@ -100,6 +100,8 @@ def signature(text: str, lang: str) -> Dict:
 
 def legal_diff(original: str, simplified: str, lang: str) -> Dict:
     """Return detected legal changes as {'findings': [...], 'error_types': set(...)}."""
+    if lang not in LEX:            # rules exist for English and Hindi only
+        return {"findings": [], "error_types": set(), "orig_sig": {}, "simp_sig": {}}
     a, b = signature(original, lang), signature(simplified, lang)
     findings, types = [], set()
 

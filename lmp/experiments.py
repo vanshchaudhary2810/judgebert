@@ -46,12 +46,14 @@ def _free(model):
 
 class Runner:
     def __init__(self, cfg: Config, human_csv: Optional[str] = None, ablation_seeds: Optional[List[int]] = None,
-                 split_seed: int = 42):
+                 split_seed: int = 42, df: Optional[pd.DataFrame] = None, data_name: str = ""):
+        """human_csv: your annotated CSV | df: a ready dataset (e.g. lmp.frjudge.frjudge_dataset()) | neither: silver demo."""
         self.cfg = cfg
-        self.human = human_csv is not None
+        self.human = human_csv is not None or df is not None
         self.ablation_seeds = ablation_seeds or cfg.seeds[:1]
         os.makedirs(cfg.output_dir, exist_ok=True)
-        self.df = prepare_data(cfg, human_csv)
+        self.df = df.reset_index(drop=True) if df is not None else prepare_data(cfg, human_csv)
+        self.data_name = data_name or ("human CSV" if human_csv else ("custom" if df is not None else "SILVER"))
         self.train, self.val, self.test = split_data(self.df, cfg, seed=split_seed)
         # silver pairs are extra training data only when real human data is used
         self.extra_silver = None
@@ -64,7 +66,8 @@ class Runner:
         self.report: List[str] = []
         self.model = self.tokenizer = None
         print(f"train {len(self.train)} | val {len(self.val)} | test {len(self.test)} pairs "
-              f"(grouped by clause, no leakage)")
+              f"(grouped by clause / official split, no leakage)")
+        print("languages:", self.df["lang"].value_counts().to_dict())
         self.df.to_csv(os.path.join(cfg.output_dir, "dataset_used.csv"), index=False)
 
     # ------------------------------------------------------------------ core
@@ -150,29 +153,27 @@ class Runner:
             m = (test["lang"] == lang).to_numpy()
             y = test.loc[m, "lmp"].to_numpy()
             for name in self.baseline_names:
-                rows.append({"setting": "joint (en+hi)", "test_lang": lang, "system": name,
+                rows.append({"setting": "joint (all languages)", "test_lang": lang, "system": name,
                              **regression_metrics(y, self.base_test.loc[m, name], cfg)})
-            rows.append({"setting": "joint (en+hi)", "test_lang": lang, "system": OURS,
+            rows.append({"setting": "joint (all languages)", "test_lang": lang, "system": OURS,
                          **regression_metrics(y, self.pred_test.loc[m, "pred_score"], cfg)})
         langs = sorted(self.df["lang"].unique())
         if len(langs) >= 2:
-            for src in langs:
-                for tgt in langs:
-                    if src == tgt:
-                        continue
-                    tr = self.train[self.train["lang"] == src]
-                    va = self.val[self.val["lang"] == src]
-                    te = test[test["lang"] == tgt]
-                    if len(tr) == 0 or len(te) == 0:
-                        continue
-                    old = self.extra_silver
-                    if old is not None:
-                        self.extra_silver = old[old["lang"] == src]
-                    p = self.fit_predict(tr, va if len(va) else self.val, {"t": te}, seeds=self.ablation_seeds,
-                                         tag=f"xling_{src}2{tgt}")["t"]
-                    self.extra_silver = old
-                    rows.append({"setting": f"zero-shot {src}->{tgt}", "test_lang": tgt, "system": OURS,
-                                 **regression_metrics(te["lmp"], p["pred_score"], cfg)})
+            # zero-shot transfer pairs (French is only ever a source language)
+            for src, tgt in [(s, t) for s in langs for t in langs if s != t and t != "fr"]:
+                tr = self.train[self.train["lang"] == src]
+                va = self.val[self.val["lang"] == src]
+                te = test[test["lang"] == tgt]
+                if len(tr) == 0 or len(te) == 0:
+                    continue
+                old = self.extra_silver
+                if old is not None:
+                    self.extra_silver = old[old["lang"] == src]
+                p = self.fit_predict(tr, va if len(va) else self.val, {"t": te}, seeds=self.ablation_seeds,
+                                     tag=f"xling_{src}2{tgt}")["t"]
+                self.extra_silver = old
+                rows.append({"setting": f"zero-shot {src}->{tgt}", "test_lang": tgt, "system": OURS,
+                             **regression_metrics(te["lmp"], p["pred_score"], cfg)})
         table = pd.DataFrame(rows).round(3)
         table.to_csv(os.path.join(cfg.output_dir, "exp2_languages.csv"), index=False)
         self._log("Experiment 2 - English vs. Hindi (and cross-lingual transfer)",
@@ -193,6 +194,18 @@ class Runner:
                 regression_metrics(self.test["lmp"], self.base_test[n], cfg)["pearson"], nan=-1))
             rows.append({"setting": "in-domain", "test_domain": d, "system": best_b,
                          **regression_metrics(self.test.loc[m, "lmp"], self.base_test.loc[m, best_b], cfg)})
+        # single-domain data (e.g. FrJUDGE = insurance): probe on the silver tenancy clauses instead
+        if len(domains) == 1 and self.extra_silver is not None:
+            other = self.extra_silver[self.extra_silver["domain"] != domains[0]]
+            if len(other):
+                old = self.extra_silver
+                self.extra_silver = old[old["domain"] == domains[0]]
+                p = self.fit_predict(self.train, self.val, {"t": other}, seeds=self.ablation_seeds,
+                                     tag="domain_probe")["t"]
+                self.extra_silver = old
+                rows.append({"setting": f"out-of-domain {domains[0]}->{other['domain'].iloc[0]} (silver probe)",
+                             "test_domain": other["domain"].iloc[0], "system": OURS,
+                             **regression_metrics(other["lmp"], p["pred_score"], cfg)})
         # train on one domain, test on the other (all clauses of the other domain are unseen)
         if len(domains) >= 2:
             for src in domains:
@@ -216,6 +229,10 @@ class Runner:
                   dom_table[["setting", "test_domain", "system", "pearson", "rmse", "mae", "over_%", "n"]])
 
         # sentence-only vs contextual input (same split, same seeds)
+        if not self.df["context"].fillna("").astype(str).str.strip().any():
+            self._log("Experiment 3b - Sentence-only vs. contextual input", pd.DataFrame(),
+                      "Skipped: this dataset has no context column (FrJUDGE pairs are isolated sentences).")
+            return dom_table, None
         ctx_cfg = replace(cfg, use_context=True)
         p_ctx = self.fit_predict(self.train, self.val, {"t": self.test}, cfg=ctx_cfg, seeds=self.ablation_seeds,
                                  tag="context")["t"]
@@ -293,6 +310,7 @@ class Runner:
                 if "BERTScore(XLM-R)" in self.base_test else None,
                 "chrF": round(float(self.base_test.loc[c.name, "chrF"]), 2),
                 "explanation": ex["explanation"],
+                "human_justification": c.get("justifications", "") if isinstance(c.get("justifications", ""), str) else "",
             })
         qual = pd.DataFrame(out)
         qual.to_csv(os.path.join(cfg.output_dir, "exp5c_qualitative_cases.csv"), index=False)
@@ -302,30 +320,42 @@ class Runner:
                         f"- **Original:** {q['original']}\n- **Simplified:** {q['simplified']}\n"
                         f"- **Gold LMP:** {q['gold_lmp']} | **Model:** {q['model_lmp']} ({q['model_decision']}) "
                         f"| **chrF:** {q['chrF']} | **BERTScore:** {q['BERTScore']}\n"
-                        f"- **Explanation:** {q['explanation']}\n\n")
+                        f"- **Explanation:** {q['explanation']}\n"
+                        + (f"- **Annotators' justification:** {q['human_justification']}\n" if q['human_justification'] else "")
+                        + "\n")
         self._log(f"Experiment 5c - Qualitative error analysis ({len(qual)} cases, full text in exp5c_qualitative_cases.md)",
                   qual[["pair_id", "lang", "gold_errors", "gold_lmp", "model_lmp", "chrF", "model_error_types"]])
         return drop_table, qual
 
     def _select_cases(self, n):
+        """>= n legally difficult, diverse cases: one per error type (if labelled), then the largest model
+        errors spread over the gold-score range (low / mid / high), at most one case per clause."""
         t = self.test.copy()
         t["abs_err"] = (self.pred_test["pred_score"] - t["lmp"]).abs()
-        picked = []
-        # one per legal error type (legally difficult cases) ...
+        t = t.sort_values("abs_err", ascending=False)
+        picked, seen = [], set()
+
+        def take(idx):
+            c = t.loc[idx, "concept_id"] if "concept_id" in t else idx
+            if idx not in picked and c not in seen:
+                picked.append(idx)
+                seen.add(c)
+
         if t["errors"].notna().any():
             for e in ERROR_TYPES:
-                c = t[t["errors"].fillna("").str.contains(e)]
-                c = c[~c.index.isin(picked)]
-                if len(c):
-                    picked.append(c.sort_values("abs_err", ascending=False).index[0])
-        # ... a few preserved ones, then the largest model errors
-        pres = t[t["lmp"] >= 7].index.tolist()[:3]
-        picked += [i for i in pres if i not in picked]
-        for i in t.sort_values("abs_err", ascending=False).index:
+                for idx in t[t["errors"].fillna("").str.contains(e)].index[:1]:
+                    take(idx)
+        bins = pd.cut(t["lmp"], bins=[0, 3, 5, 7, 10.01], labels=False)
+        quota = max(1, (n - len(picked)) // 4)
+        for b in range(4):
+            for idx in t[bins == b].index:
+                if sum(bins.loc[picked] == b) >= quota:
+                    break
+                take(idx)
+        for idx in t.index:
             if len(picked) >= n:
                 break
-            if i not in picked:
-                picked.append(i)
+            take(idx)
         return t.loc[picked[:n]]
 
     # ------------------------------------------------------------------ plots + report
@@ -365,7 +395,7 @@ class Runner:
 
     def write_report(self):
         head = ("# Results - Explainable Multilingual Legal Meaning Preservation\n\n"
-                f"Data: {'HUMAN-annotated' if self.human else 'SILVER (rule-generated, pipeline demo only)'} | "
+                f"Data: {self.data_name if self.human else 'SILVER (rule-generated, pipeline demo only)'} | "
                 f"model: `{self.cfg.model_name}` | seeds: {self.cfg.seeds}\n")
         path = os.path.join(self.cfg.output_dir, "results.md")
         with open(path, "w", encoding="utf-8") as f:

@@ -32,14 +32,17 @@ class Config:
     dropout: float = 0.1
 
     # ---- training ----
-    epochs: int = 12
+    epochs: int = 20
     batch_size: int = 16
-    lr: float = 2e-5
+    lr: float = 3e-5
     head_lr: float = 1e-3
     weight_decay: float = 0.01
     warmup_ratio: float = 0.1
-    patience: int = 4
+    patience: int = 6
     min_epochs: int = 3          # no checkpoint selection / early stopping before this epoch
+    # checkpoint selection: 'pearson' (correlation with humans, the paper's main metric; RMSE breaks ties)
+    # or 'rmse'. RMSE alone tends to keep early, under-trained checkpoints that just predict the mean.
+    select_metric: str = "pearson"
     seeds: List[int] = field(default_factory=lambda: [42, 43, 44])
     fp16: bool = True
 

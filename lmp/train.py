@@ -169,8 +169,10 @@ def train_model(train_df: pd.DataFrame, val_df: pd.DataFrame, cfg: Config, seed:
                   f"| val r {val['pearson']:.3f} | {time.time() - t0:.0f}s")
         if epoch < cfg.min_epochs:
             continue                      # let the randomly initialised heads settle first
-        if val["rmse"] < best - 1e-4:
-            best, bad = val["rmse"], 0
+        # lower is better: -Pearson (+ a small RMSE term to break ties), or plain RMSE
+        crit = (-val["pearson"] + 0.02 * val["rmse"]) if cfg.select_metric == "pearson" else val["rmse"]
+        if crit < best - 1e-4:
+            best, bad = crit, 0
             best_state = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
         else:
             bad += 1

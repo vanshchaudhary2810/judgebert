@@ -38,6 +38,9 @@ Start at 10 (Accurate) or 6 (Imprecise), subtract 1 for every error found, never
 
 Leave `errors` empty when there is no error. Use `notes` for anything unclear.
 
+For translated FrJUDGE pairs, also fill `translation_ok` (yes/no): mark *no* if the translation itself is broken
+(not the simplification). Do not look at the hidden `projected_lmp` column before scoring.
+
 ## Context sub-study (Experiment 3)
 
 For ~60 pairs, rate twice: first sentence-only, later (after a gap) with the `context` column visible.

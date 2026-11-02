@@ -77,6 +77,14 @@ def split_data(df: pd.DataFrame, cfg: Config, seed: int = 42) -> Tuple[pd.DataFr
     The JUDGEBERT paper split instances randomly; grouping avoids leakage where a perturbed
     copy of a test clause appears in training.
     """
+    if "split" in df.columns and df["split"].notna().all() and {"train", "test"} <= set(df["split"]):
+        # explicit split (e.g. the official FrJUDGE train/dev/test); translations share their pair's split
+        parts = [df[df["split"] == k].reset_index(drop=True) for k in ("train", "val", "test")]
+        if len(parts[1]) == 0:
+            parts[1] = parts[0].sample(frac=0.1, random_state=seed)
+            parts[0] = parts[0].drop(parts[1].index)
+            parts = [x.reset_index(drop=True) for x in parts]
+        return tuple(parts)
     groups = df["concept_id"] if "concept_id" in df else df["source_id"]
     gss = GroupShuffleSplit(n_splits=1, test_size=cfg.test_size, random_state=seed)
     tr_idx, te_idx = next(gss.split(df, groups=groups))

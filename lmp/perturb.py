@@ -244,6 +244,8 @@ _HALLUCINATIONS = {
 
 
 def hallucination(text, lang, domain="insurance", rng=None):
+    if (lang, domain) not in _HALLUCINATIONS:
+        return None
     rng = rng or random.Random(0)
     extra = rng.choice(_HALLUCINATIONS[(lang, domain)])
     return _tidy(text + " " + extra, lang)
@@ -348,6 +350,8 @@ def build_sanity_pairs(df: pd.DataFrame, seed: int = 7) -> pd.DataFrame:
     rng = random.Random(seed)
     src = df.drop_duplicates("source_id")[["source_id", "concept_id", "lang", "domain", "context", "original"]]
     pool = df[df.perturbation.isin(["faithful"])] if "perturbation" in df else df
+    if len(pool) == 0:
+        pool = df
     rows = []
     for _, r in src.iterrows():
         rows.append({**r.to_dict(), "simplified": r["original"], "lmp": 10.0, "errors": "",
@@ -372,10 +376,11 @@ def perturbation_suite(base: pd.DataFrame) -> pd.DataFrame:
     """
     rng = random.Random(0)
     rows = []
+    base = base[base["lang"].isin(["en", "hi"])]          # the edit rules exist for English and Hindi
     for _, r in base.iterrows():
         rows.append({**r.to_dict(), "variant": "faithful"})
         for name, (fn, etype, _) in PERTURBATIONS.items():
             p = fn(r["simplified"], r["lang"], r["domain"], rng)
             if p and p != r["simplified"]:
                 rows.append({**r.to_dict(), "simplified": p, "variant": name, "errors": etype})
-    return pd.DataFrame(rows)
+    return pd.DataFrame(rows, columns=list(base.columns) + ["variant"]) if not rows else pd.DataFrame(rows)
