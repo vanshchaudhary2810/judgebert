@@ -17,7 +17,8 @@ For each original-simplified pair the system produces:
 
 1. Open `JUDGEBERT_LMP_Colab.ipynb` in Colab -> `Runtime -> Change runtime type -> T4 GPU`.
 2. `Runtime -> Run all`. Default: `DATASET = "frjudge_xling"` (FrJUDGE + English/Hindi translations), `FAST_MODE = True`.
-3. When the team annotation is done, set `HUMAN_CSV` to the annotated file and `FAST_MODE = False` (3 seeds, mean ± std).
+3. Final run: `FAST_MODE = False` (3 seeds, mean ± std, about 1.5-2 h). When the team has scored the 180 translated test
+   pairs, set `HUMAN_SCORES_CSV` to that file: English/Hindi test labels then come from our annotators.
 
 The notebook is self-contained (it writes the `lmp/` package with `%%writefile`), so it needs no upload.
 
@@ -33,6 +34,8 @@ CPU smoke test without downloads: `python tests/smoke_test.py`.
 | Exp 3 new domain / context | `exp3_domain_and_context` | insurance->tenancy and tenancy->insurance (true out-of-domain); sentence-only vs. context input |
 | Exp 4 sanity checks | `exp4_sanity` | identical (expect 10) and unrelated same-domain legal pairs (expect 1), with vs. without data augmentation |
 | Exp 5 error analysis (>=15 cases) | `exp5_robustness_and_errors` | score drop for 9 single legal edits per system, error-type P/R/F1 (model vs. rules), 20 explained cases (`exp5c_qualitative_cases.md`) |
+
+| Exp 5d improvement | `exp5d_legal_edit_ablation` | retrain with single legal edits of real well-preserved training pairs (number / negation / shall->may + one other); compares agreement with humans and edit sensitivity against the main model |
 
 All tables are written to `outputs/` as CSV plus `outputs/results.md`, with figures `fig_scatter.png` and `fig_robustness.png`.
 

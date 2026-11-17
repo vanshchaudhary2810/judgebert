@@ -384,3 +384,37 @@ def perturbation_suite(base: pd.DataFrame) -> pd.DataFrame:
             if p and p != r["simplified"]:
                 rows.append({**r.to_dict(), "simplified": p, "variant": name, "errors": etype})
     return pd.DataFrame(rows, columns=list(base.columns) + ["variant"]) if not rows else pd.DataFrame(rows)
+
+
+def real_pair_edits(df: pd.DataFrame, min_lmp: float = 7.0, seed: int = 0,
+                    priority=("change_number", "negation_flip", "obligation_flip")) -> pd.DataFrame:
+    """Legal-edit augmentation on REAL pairs: take well-preserved English/Hindi pairs (human or projected
+    LMP >= min_lmp) and create two edited copies of the simplification: one edit from `priority` (the
+    model's weak spots in Exp 5a) and one other legal edit.
+
+    New label = min(original LMP, severity of the edit) and the edit's error type. Pass only TRAINING
+    pairs; the new rows keep their concept_id/split, so no edited copy of a test clause is ever trained on.
+    """
+    rng = random.Random(seed)
+    nrng = np.random.default_rng(seed)
+    base = df[df["lang"].isin(["en", "hi"]) & (df["lmp"] >= min_lmp)]
+    rows = []
+    for _, r in base.iterrows():
+        first = [n for n in priority if n in PERTURBATIONS]
+        rest = [n for n in PERTURBATIONS if n not in first]
+        rng.shuffle(first)
+        rng.shuffle(rest)
+        for group in (first, rest):
+            for name in group:
+                fn, etype, sev = PERTURBATIONS[name]
+                p = fn(str(r["simplified"]), r["lang"], r.get("domain", "insurance"), rng)
+                if not p or p == r["simplified"]:
+                    continue
+                new = r.to_dict()
+                new.update({"simplified": p,
+                            "lmp": round(_clip(min(float(r["lmp"]), sev + nrng.normal(0, 0.5))), 2),
+                            "errors": etype, "perturbation": f"edit:{name}", "is_sanity": False,
+                            "label_source": "edit", "pair_id": f"{r.get('pair_id', '')}-E{name}"})
+                rows.append(new)
+                break
+    return pd.DataFrame(rows, columns=list(df.columns)) if not rows else pd.DataFrame(rows)

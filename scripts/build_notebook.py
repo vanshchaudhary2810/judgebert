@@ -75,17 +75,35 @@ cells.append(M("""## 4. Configuration
 * `DATASET`: `"frjudge_xling"` (default), `"frjudge"` or `"silver"` - see the table at the top.
 * `HUMAN_CSV`: path to your team's annotated file (overrides `DATASET`). Upload it with the folder icon on the left.
 * `MODEL_NAME`: `xlm-roberta-base` (default), `google/muril-base-cased` (Indian languages), `xlm-roberta-large` (A100).
-* `FAST_MODE`: 1 seed / 15 epochs (roughly 35-45 min on a T4 for `frjudge_xling`). Off = 3 seeds, mean ± std as in JUDGEBERT."""))
+* `HUMAN_SCORES_CSV`: the team's scored `to_annotate_translated.csv` (Section 5b). When set, the English/Hindi test
+  pairs use **our human scores** instead of projected French ones, and projected-vs-human agreement is reported.
+* `FAST_MODE`: `False` = **final run**: 3 seeds, mean ± std as in JUDGEBERT (about 1.5-2 h on a T4).
+  `True` = 1 seed, 15 epochs (about 45-60 min), for checking.
+* `SAVE_TO_DRIVE`: copies all results and the trained model to `MyDrive/judgebert_final`, so nothing is lost if the
+  session ends. Allow Drive access when asked, right at the start."""))
 cells.append(C("""from lmp.config import Config
 
 DATASET    = "frjudge_xling"   # "frjudge" | "frjudge_xling" | "silver"
-HUMAN_CSV  = None              # e.g. "data/annotated_pairs.csv"
+HUMAN_CSV  = None              # e.g. "data/annotated_pairs.csv" (a fully new annotated dataset)
+HUMAN_SCORES_CSV = None        # e.g. "to_annotate_translated_scored.csv" (team scores for the 180 translated pairs)
 MODEL_NAME = "xlm-roberta-base"
-FAST_MODE  = True
+FAST_MODE  = False             # False = final run (3 seeds)
+SAVE_TO_DRIVE = True
 
 cfg = Config(model_name=MODEL_NAME, output_dir="outputs")
 if FAST_MODE:
     cfg.seeds, cfg.epochs = [42], 15
+os.makedirs("outputs", exist_ok=True)
+DRIVE_DIR = None
+if SAVE_TO_DRIVE:
+    try:
+        from google.colab import drive
+        drive.mount("/content/drive")
+        DRIVE_DIR = "/content/drive/MyDrive/judgebert_final"
+        os.makedirs(DRIVE_DIR, exist_ok=True)
+        print("Results will also be saved to", DRIVE_DIR)
+    except Exception as e:
+        print("Google Drive not available - results stay in the session:", e)
 cfg"""))
 
 cells.append(M("""## 4b. Load FrJUDGE (+ translate to English and Hindi)
@@ -104,6 +122,12 @@ if HUMAN_CSV is None and DATASET != "silver":
     display(data_df.groupby(["lang", "split"]).size().unstack())
     if DATASET == "frjudge_xling":
         display(data_df[data_df.concept_id == "FR010"][["lang", "original", "simplified", "lmp"]])  # one pair in fr/en/hi
+    if HUMAN_SCORES_CSV and DATASET == "frjudge_xling":
+        from lmp.frjudge import apply_human_scores
+        data_df, agreement = apply_human_scores(data_df, HUMAN_SCORES_CSV)
+        agreement.to_csv("outputs/human_vs_projected_agreement.csv", index=False)
+        print("Do legal-meaning judgments survive translation? (projected French label vs. our human score)")
+        display(agreement)
 else:
     data_df = None"""))
 
@@ -127,9 +151,9 @@ All 90 official-test pairs in English and in Hindi (180 pairs). Our annotators r
 **and** measures whether legal-meaning judgments survive translation (projected vs. re-scored agreement)."""))
 cells.append(C("""if data_df is not None and DATASET == "frjudge_xling":
     from lmp.frjudge import make_verification_sheet
-    sheet = make_verification_sheet(data_df, "data/to_annotate_translated.csv", n_per_lang=90)
+    sheet = make_verification_sheet(data_df, "outputs/to_annotate_translated.csv", n_per_lang=90)
     display(sheet.head())
-    # from google.colab import files; files.download("data/to_annotate_translated.csv")"""))
+    # saved in outputs/ -> included in outputs.zip and the Drive copy"""))
 
 cells.append(M("## 6. Load data and split (official FrJUDGE split / grouped by clause - no leakage)"))
 cells.append(C("""from lmp.experiments import Runner
@@ -137,7 +161,8 @@ if HUMAN_CSV:
     runner = Runner(cfg, human_csv=HUMAN_CSV, data_name="our human-annotated EN/HI pairs")
 elif data_df is not None:
     runner = Runner(cfg, df=data_df, data_name={"frjudge": "FrJUDGE (human, French)",
-                    "frjudge_xling": "FrJUDGE + NLLB English/Hindi (projected labels)"}[DATASET])
+                    "frjudge_xling": ("FrJUDGE + NLLB English/Hindi (EN/HI test = our human scores)" if HUMAN_SCORES_CSV
+                                      else "FrJUDGE + NLLB English/Hindi (projected labels)")}[DATASET])
 else:
     runner = Runner(cfg)"""))
 
@@ -162,28 +187,74 @@ display(exp5_drop)
 display(Image("outputs/fig_robustness.png"))
 display(exp5_cases[['pair_id','lang','gold_lmp','model_lmp','chrF','explanation','human_justification']])"""))
 
+cells.append(M("""## 11b. Improvement - legal-edit augmentation (Experiment 5d)
+Exp 5a showed the model barely reacts to changed numbers/dates and flipped negations. Here the model is retrained
+(same split, same seed) with extra pairs made by applying one legal edit to **real, well-preserved training pairs**
+(one number / negation / shall->may edit + one other edit per pair). The table compares it with the main model."""))
+cells.append(C("""exp5d = runner.exp5d_legal_edit_ablation()
+display(exp5d)"""))
+
 cells.append(M("## 12. Full report"))
 cells.append(C("""runner.write_report()
 from IPython.display import Markdown
 display(Markdown(open("outputs/results.md", encoding="utf-8").read()))"""))
 
-cells.append(M("## 13. Use the system on any pair"))
+cells.append(M("## 13. Save results (zip download + Google Drive)"))
+cells.append(C("""import shutil
+!zip -qr outputs.zip outputs -x "outputs/lmp_model/*"
+if DRIVE_DIR:
+    shutil.copytree("outputs", DRIVE_DIR, dirs_exist_ok=True)          # includes the trained model
+    for f in ("data/frjudge_en.csv", "data/frjudge_hi.csv"):
+        if os.path.exists(f):
+            shutil.copy(f, DRIVE_DIR)
+    shutil.copy("outputs.zip", DRIVE_DIR)
+    print("Saved everything to", DRIVE_DIR)
+try:
+    from google.colab import files
+    files.download("outputs.zip")
+except Exception as e:
+    print("Download outputs.zip from the file panel:", e)"""))
+
+cells.append(M("""## 14. The system at work
+The trained model on single legal edits in English and Hindi: score, decision, error types and explanation,
+next to chrF (a generic metric) for comparison."""))
 cells.append(C("""from lmp.explain import explain_pair
-out = explain_pair(runner.model, runner.tokenizer,
-    original="The Insurer shall not be liable for any loss caused by flood, unless the Flood Extension has been purchased.",
-    simplified="The insurer will not pay for flood damage.",
-    lang="en", cfg=cfg)
-print(out["explanation"])
-{k: out[k] for k in ["lmp_score", "decision", "error_types", "rule_error_types"]}"""))
-cells.append(C("""# Interactive demo for the presentation (public link valid for 72 h)
+from lmp.baselines import chrf
+CASES = [
+    ("en", "Faithful simplification",
+     "The Insured shall notify the Insurer in writing of any loss within 30 days of its occurrence, failing which the claim shall not be admissible.",
+     "The insured must tell the insurer in writing about any loss within 30 days. Otherwise, the claim will not be accepted."),
+    ("en", "Obligation -> permission (shall -> may)",
+     "The Insured shall notify the Insurer in writing of any loss within 30 days of its occurrence, failing which the claim shall not be admissible.",
+     "The insured may tell the insurer in writing about any loss within 30 days. Otherwise, the claim will not be accepted."),
+    ("en", "Exception dropped (unless ...)",
+     "The Insurer shall not be liable for any loss or damage caused by flood, unless the Flood Extension has been purchased and the additional premium paid.",
+     "The insurer will not pay for flood damage."),
+    ("en", "Parties swapped",
+     "The security deposit shall be refunded by the Landlord within 30 days of the Tenant vacating the premises.",
+     "The tenant must return the security deposit within 30 days after the landlord leaves."),
+    ("hi", "Hindi: date changed (5th -> 10th)",
+     "किरायेदार प्रत्येक कैलेंडर माह की 5 तारीख को या उससे पूर्व रु. 25,000 का मासिक किराया अदा करेगा।",
+     "किरायेदार को हर महीने की 10 तारीख तक रु. 25,000 मासिक किराया देना होगा।"),
+    ("hi", "Hindi: faithful simplification",
+     "किरायेदार प्रत्येक कैलेंडर माह की 5 तारीख को या उससे पूर्व रु. 25,000 का मासिक किराया अदा करेगा।",
+     "किरायेदार को हर महीने की 5 तारीख तक रु. 25,000 मासिक किराया देना होगा।"),
+]
+demo_rows = []
+for lang, label, orig, simp in CASES:
+    ex = explain_pair(runner.model, runner.tokenizer, orig, simp, lang, cfg)
+    pair = pd.DataFrame([{"original": orig, "simplified": simp}])
+    demo_rows.append({"case": label, "ours": ex["lmp_score"], "decision": ex["decision"],
+                      "chrF": round(float(chrf(pair)[0]), 2), "error types": ", ".join(ex["error_types"]) or "-"})
+    print(f"\\n=== {label} ===\\nSimplified: {simp}\\n{ex['explanation']}")
+demo_table = pd.DataFrame(demo_rows)
+demo_table.to_csv("outputs/system_examples.csv", index=False)
+if DRIVE_DIR:
+    shutil.copy("outputs/system_examples.csv", DRIVE_DIR)
+display(demo_table)"""))
+cells.append(C("""# Interactive web app (public link, valid 72 h): paste any clause and its simplification
 from lmp.demo import launch_demo
 launch_demo(runner.model, runner.tokenizer, cfg)"""))
-
-cells.append(M("## 14. Save results"))
-cells.append(C("""!zip -qr outputs.zip outputs -x "outputs/lmp_model/*"
-from google.colab import files
-files.download("outputs.zip")
-# To keep the trained model too:  from google.colab import drive; drive.mount('/content/drive'); !cp -r outputs /content/drive/MyDrive/lmp_outputs"""))
 
 nb["cells"] = cells
 nb["metadata"] = {"accelerator": "GPU", "colab": {"provenance": [], "gpuType": "T4"},

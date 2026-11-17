@@ -56,6 +56,7 @@ class Config:
     # ---- data ----
     use_context: bool = False
     data_augmentation: bool = True   # add identical (=10) and unrelated (=1) pairs to training
+    legal_edit_aug: bool = False     # add single legal edits of real well-preserved pairs (Exp 5d)
     test_size: float = 0.2
     val_size: float = 0.1
 

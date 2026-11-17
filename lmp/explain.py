@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 import torch
 
-from .config import ERROR_TYPES, Config
+from .config import ERROR_TYPES, Config, score_to_decision
 from .legal_diff import legal_diff
 from .train import first_input, predict
 
@@ -103,7 +103,8 @@ def explain_pair(model, tokenizer, original: str, simplified: str, lang: str, cf
     if ig:
         neg_words = [w for w, s in sorted(ig["simplified"], key=lambda ws: ws[1])[:top_k] if s < 0]
 
-    lines = [f"LMP score: {score:.1f}/10 -> {pred['pred_decision']}."]
+    decision = score_to_decision(score, cfg)      # always consistent with the score (paper's brackets)
+    lines = [f"LMP score: {score:.1f}/10 -> {decision}."]
     if model_errors:
         lines.append("Predicted legal error type(s): " + "; ".join(
             f"{e} (p={probs[e]:.2f}): {ERROR_DESCRIPTIONS[e]}" for e in model_errors) + ".")
@@ -116,7 +117,8 @@ def explain_pair(model, tokenizer, original: str, simplified: str, lang: str, cf
         lines.append("Words in the simplification that lowered the score most: " + ", ".join(f"'{w}'" for w in neg_words) + ".")
     return {
         "lmp_score": round(score, 2),
-        "decision": pred["pred_decision"],
+        "decision": decision,
+        "decision_head": pred["pred_decision"],
         "error_types": model_errors,
         "error_probs": {k: round(v, 3) for k, v in probs.items()},
         "rule_findings": rules["findings"],

@@ -24,7 +24,7 @@ from .explain import explain_pair
 from .legal_diff import legal_diff
 from .metrics import (bootstrap_ci, error_type_metrics, regression_metrics, sanity_metrics,
                       summarize_seeds)
-from .perturb import build_sanity_pairs, build_silver_dataset, perturbation_suite
+from .perturb import build_sanity_pairs, build_silver_dataset, perturbation_suite, real_pair_edits
 from .train import predict, save_model, train_model
 
 OURS = "Ours (multi-task LMP)"
@@ -77,6 +77,10 @@ class Runner:
         cfg = cfg or self.cfg
         seeds = seeds or cfg.seeds
         tr = augment(train, cfg, self.extra_silver) if augment_train else train
+        if cfg.legal_edit_aug:
+            edits = real_pair_edits(train)
+            print(f"[{tag}] + {len(edits)} legal-edit pairs built from real training pairs")
+            tr = pd.concat([tr, edits], ignore_index=True)
         per_seed = {k: [] for k in eval_sets}
         for i, seed in enumerate(seeds):
             print(f"[{tag}] training seed {seed} on {len(tr)} pairs ...")
@@ -358,6 +362,44 @@ class Runner:
             take(idx)
         return t.loc[picked[:n]]
 
+    # ------------------------------------------------------------------ Exp 5d (improvement ablation)
+    def exp5d_legal_edit_ablation(self):
+        """Does training on single legal edits of REAL pairs fix the weak spots (numbers, negation)?
+        Same seed(s), same split; only the extra training pairs differ."""
+        cfg = self.cfg
+        seeds = self.ablation_seeds
+        aug_cfg = replace(cfg, legal_edit_aug=True)
+        p = self.fit_predict(self.train, self.val, {"test": self.test, "robust": self.robust}, cfg=aug_cfg,
+                             seeds=seeds, tag="legal_edit_aug")
+        k = len(seeds)
+        main_test = np.mean(self.pred_test.attrs["per_seed_scores"][:k], axis=0)
+        main_rob = np.mean(self.pred_robust.attrs["per_seed_scores"][:k], axis=0)
+
+        def drops(scores):
+            r = self.robust.assign(_s=scores)
+            m = r.groupby("variant")["_s"].mean()
+            d = (m.loc["faithful"] - m).drop(index="faithful")
+            return d
+
+        rows = []
+        for name, t_scores, r_scores in [("Ours (main)", main_test, main_rob),
+                                         ("Ours + legal-edit augmentation", p["test"]["pred_score"].to_numpy(),
+                                          p["robust"]["pred_score"].to_numpy())]:
+            m = regression_metrics(self.test["lmp"], t_scores, cfg)
+            d = drops(r_scores) if len(self.robust) else pd.Series(dtype=float)
+            row = {"system": name, "pearson": m["pearson"], "rmse": m["rmse"], "over_%": m["over_%"],
+                   "avg_edit_drop": float(d.mean()) if len(d) else float("nan")}
+            for v in ("change_number", "negation_flip", "obligation_flip", "entity_swap", "drop_exception"):
+                row[f"drop_{v}"] = float(d.get(v, float("nan")))
+            rows.append(row)
+        table = pd.DataFrame(rows).round(3)
+        table.to_csv(os.path.join(cfg.output_dir, "exp5d_legal_edit_ablation.csv"), index=False)
+        self._log(f"Experiment 5d - Improvement: legal-edit augmentation (seeds {seeds}, same split)", table,
+                  "Test-set agreement with humans (pearson, rmse) and sensitivity to single legal edits (drops, "
+                  "higher = better). Edits are built only from training pairs.")
+        self.ablation_table = table
+        return table
+
     # ------------------------------------------------------------------ plots + report
     def _plot_scatter(self, y):
         try:
@@ -410,4 +452,5 @@ class Runner:
         self.exp3_domain_and_context()
         self.exp4_sanity()
         self.exp5_robustness_and_errors()
+        self.exp5d_legal_edit_ablation()
         self.write_report()

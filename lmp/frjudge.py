@@ -152,3 +152,41 @@ def make_verification_sheet(xling: pd.DataFrame, path: str, n_per_lang: int = 90
     print(f"Wrote {len(sheet)} pairs ({n_per_lang} per language) to {path}: "
           f"{sheet['split'].value_counts().to_dict()}")
     return sheet
+
+
+def apply_human_scores(xling: pd.DataFrame, annotated_csv: str):
+    """Replace projected English/Hindi labels with our team's human scores (annotated verification sheet).
+
+    Uses the mean of annotator_1..k per pair; pairs marked translation_ok = no are dropped (broken
+    translation, not a simplification error). Returns (updated dataframe, agreement table).
+    """
+    import re
+    from scipy.stats import pearsonr
+    from .data import krippendorff_alpha
+    ann = pd.read_csv(annotated_csv)
+    cols = [c for c in ann.columns if re.fullmatch(r"annotator_\d+", c)]
+    ann = ann.dropna(subset=cols, how="all").copy()
+    ann["human_lmp"] = ann[cols].mean(axis=1)
+    bad = set(ann.loc[ann.get("translation_ok", pd.Series("", index=ann.index)).astype(str).str.lower()
+                      .str.strip().isin(["no", "n", "0", "false"]), "pair_id"])
+    rows = []
+    for lang in ("en", "hi"):
+        a = ann[(ann["lang"] == lang) & ~ann["pair_id"].isin(bad)]
+        if len(a) >= 3:
+            rows.append({"lang": lang, "pairs": len(a), "alpha_our_annotators": round(krippendorff_alpha(a, cols), 3),
+                         "pearson_projected_vs_human": round(float(pearsonr(a["projected_lmp"], a["human_lmp"])[0]), 3),
+                         "mean_projected": round(float(a["projected_lmp"].mean()), 2),
+                         "mean_human": round(float(a["human_lmp"].mean()), 2),
+                         "broken_translations": int(sum(ann.loc[ann["lang"] == lang, "pair_id"].isin(bad)))})
+    out = xling[~xling["pair_id"].isin(bad)].copy()
+    hmap = dict(zip(ann["pair_id"], ann["human_lmp"]))
+    hit = out["pair_id"].isin(hmap)
+    out.loc[hit, "lmp"] = out.loc[hit, "pair_id"].map(hmap)
+    out.loc[hit, "label_source"] = "human"
+    if "errors" in ann and ann["errors"].astype(str).str.strip().replace("nan", "").ne("").any():
+        # the team labelled error types: an empty cell on an annotated pair means "no error" (known)
+        emap = {p: (e.strip() if isinstance(e, str) else "") for p, e in zip(ann["pair_id"], ann["errors"])}
+        out["errors"] = out["errors"].astype(object)
+        out.loc[hit, "errors"] = out.loc[hit, "pair_id"].map(emap).fillna("")
+    print(f"Human scores applied to {int(hit.sum())} pairs; {len(bad)} broken translations removed.")
+    return out.reset_index(drop=True), pd.DataFrame(rows)
