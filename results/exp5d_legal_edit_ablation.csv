@@ -1,0 +1,3 @@
+system,pearson,rmse,over_%,avg_edit_drop,drop_change_number,drop_negation_flip,drop_obligation_flip,drop_entity_swap,drop_drop_exception
+Ours (main),0.597,2.051,43.704,1.636,1.077,1.91,1.096,2.44,
+Ours + legal-edit augmentation,0.496,2.398,23.704,0.879,-0.309,2.768,0.513,1.27,

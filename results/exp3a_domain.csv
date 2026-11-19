@@ -1,0 +1,4 @@
+setting,test_domain,system,pearson,spearman,rmse,mae,over_%,decision_acc,decision_macroF1,n
+in-domain (joint training),insurance,Ours (multi-task LMP),0.611,0.59,1.982,1.552,35.926,0.652,0.548,270
+in-domain,insurance,BERTScore(XLM-R),0.413,0.428,3.834,3.125,80.741,0.456,0.209,270
+out-of-domain insurance->tenancy (silver probe),tenancy,Ours (multi-task LMP),0.309,0.283,3.119,2.488,68.317,0.579,0.383,202

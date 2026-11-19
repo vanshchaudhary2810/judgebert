@@ -1,0 +1,39 @@
+{
+  "model_name": "xlm-roberta-base",
+  "max_len": 256,
+  "dropout": 0.1,
+  "epochs": 20,
+  "batch_size": 16,
+  "lr": 3e-05,
+  "head_lr": 0.001,
+  "weight_decay": 0.01,
+  "warmup_ratio": 0.1,
+  "patience": 6,
+  "min_epochs": 3,
+  "select_metric": "pearson",
+  "seeds": [
+    42,
+    43,
+    44
+  ],
+  "fp16": true,
+  "over_penalty": 2.0,
+  "w_decision": 0.5,
+  "w_errors": 0.5,
+  "use_context": false,
+  "data_augmentation": true,
+  "legal_edit_aug": false,
+  "test_size": 0.2,
+  "val_size": 0.1,
+  "preserved_min": 6.5,
+  "not_preserved_max": 2.0,
+  "bertscore_model": "xlm-roberta-base",
+  "bertscore_layer": 9,
+  "sbert_models": [
+    "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+    "sentence-transformers/LaBSE"
+  ],
+  "run_neural_baselines": true,
+  "output_dir": "outputs",
+  "device": null
+}

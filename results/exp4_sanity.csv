@@ -1,0 +1,9 @@
+system,identical_>=99%,unrelated_<=1%,identical_mean,unrelated_mean
+TF-IDF(char),100.0,0.37,10.0,2.44
+chrF,100.0,0.0,10.0,2.76
+BLEU,100.0,36.67,10.0,1.15
+BERTScore(XLM-R),100.0,0.0,10.0,8.6
+SBERT-Multi,100.0,1.48,10.0,4.34
+LaBSE,100.0,0.0,10.0,5.11
+Ours (multi-task LMP) + DA,95.19,93.7,9.98,1.04
+Ours (multi-task LMP) (no DA),0.0,0.0,8.09,4.26
