@@ -88,7 +88,7 @@ def integrated_gradients(model, tokenizer, original: str, simplified: str, cfg: 
 
 def explain_pair(model, tokenizer, original: str, simplified: str, lang: str, cfg: Config,
                  domain: str = "", context: str = "", top_k: int = 5, err_thr: float = 0.5,
-                 with_ig: bool = True) -> Dict:
+                 with_ig: bool = True, ig_steps: int = 32) -> Dict:
     """Full system output for one pair: score, decision, error types, evidence and explanation."""
     row = pd.DataFrame([{"original": original, "simplified": simplified, "context": context,
                          "lang": lang, "domain": domain}])
@@ -98,7 +98,7 @@ def explain_pair(model, tokenizer, original: str, simplified: str, lang: str, cf
     model_errors = [e for e, p in sorted(probs.items(), key=lambda kv: -kv[1]) if p >= err_thr]
     rules = legal_diff(original, simplified, lang)
 
-    ig = integrated_gradients(model, tokenizer, original, simplified, cfg, context) if with_ig else None
+    ig = integrated_gradients(model, tokenizer, original, simplified, cfg, context, steps=ig_steps) if with_ig else None
     neg_words = []
     if ig:
         neg_words = [w for w, s in sorted(ig["simplified"], key=lambda ws: ws[1])[:top_k] if s < 0]

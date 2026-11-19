@@ -14,9 +14,9 @@ from typing import Dict, List
 
 LEX = {
     "en": {
-        "obligation": [r"\bshall\b(?! not)", r"\bmust\b(?! not)", r"\brequired to\b", r"\bhas to\b", r"\bhave to\b",
-                       r"\bliable to\b", r"\bresponsible for\b", r"\bbound to\b", r"\bwill\b(?! not)"],
-        "permission": [r"\bmay\b(?! not)", r"\bcan\b", r"\bentitled to\b", r"\ballowed to\b(?<!not allowed to)"],
+        "obligation": [r"\bshall\b(?! not\b)", r"\bmust\b(?! not\b)", r"\brequired to\b", r"\bhas to\b", r"\bhave to\b",
+                       r"\bliable to\b", r"\bresponsible for\b", r"\bbound to\b", r"\bwill\b(?! not\b)"],
+        "permission": [r"\bmay\b(?! not\b)", r"\bcan\b", r"\bentitled to\b", r"\ballowed to\b(?<!not allowed to)"],
         "negation": [r"(?<!if )(?<!does )\bnot\b(?! less than)", r"\bno\b(?! later| less)", r"\bnever\b", r"\bcannot\b", r"\bnothing\b"],
         "exception": [r"\bunless\b", r"\bexcept\b", r"\bprovided\b", r"\bsave\b", r"\bsubject to\b",
                       r"\bwithout\b", r"\bother than\b", r"\bfailing which\b", r"\bfailure to\b", r"\botherwise\b",

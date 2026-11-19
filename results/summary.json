@@ -1,0 +1,331 @@
+{
+  "meta": {
+    "model": "xlm-roberta-base",
+    "seeds": [
+      42,
+      43,
+      44
+    ],
+    "n_test": 270,
+    "data": "FrJUDGE (297 French pairs, 5 law-student annotators) + NLLB-200 English/Hindi translations",
+    "labels_note": "English and Hindi gold scores are the French human labels projected through translation."
+  },
+  "headline": [
+    {
+      "measure": "Pearson with human scores (3 seeds)",
+      "ours": "0.58 ± 0.02",
+      "ours_note": "0.61 with the 3 seed models averaged",
+      "baseline": "0.41",
+      "baseline_name": "BERTScore"
+    },
+    {
+      "measure": "French alone",
+      "ours": "0.70",
+      "ours_note": "the paper's French-only model: 0.74",
+      "baseline": "0.53",
+      "baseline_name": "BERTScore"
+    },
+    {
+      "measure": "English / Hindi",
+      "ours": "0.58 / 0.56",
+      "ours_note": "",
+      "baseline": "0.41 / 0.37",
+      "baseline_name": ""
+    },
+    {
+      "measure": "Unrelated legal sentences scored correctly low",
+      "ours": "94%",
+      "ours_note": "",
+      "baseline": "37%",
+      "baseline_name": "BLEU"
+    },
+    {
+      "measure": "Average score drop after one legal edit",
+      "ours": "1.12",
+      "ours_note": "",
+      "baseline": "0.47",
+      "baseline_name": "TF-IDF char"
+    }
+  ],
+  "exp1": [
+    {
+      "system": "Ours (multi-task LMP)",
+      "ours": true,
+      "pearson": "0.576 ± 0.018",
+      "ci": "[0.53, 0.69] (averaged)",
+      "spearman": "0.553 ± 0.018",
+      "rmse": "2.118 ± 0.086",
+      "mae": "1.644 ± 0.082",
+      "over": "38.148 ± 3.954",
+      "f1": "0.530 ± 0.026"
+    },
+    {
+      "system": "BERTScore",
+      "ours": false,
+      "pearson": "0.413",
+      "ci": "[0.32, 0.52]",
+      "spearman": "0.428",
+      "rmse": "3.834",
+      "mae": "3.125",
+      "over": "80.741",
+      "f1": "0.209"
+    },
+    {
+      "system": "chrF",
+      "ours": false,
+      "pearson": "0.41",
+      "ci": "[0.31, 0.51]",
+      "spearman": "0.401",
+      "rmse": "2.507",
+      "mae": "2.064",
+      "over": "22.963",
+      "f1": "0.3"
+    },
+    {
+      "system": "BLEU",
+      "ours": false,
+      "pearson": "0.316",
+      "ci": "[0.20, 0.43]",
+      "spearman": "0.305",
+      "rmse": "4.291",
+      "mae": "3.788",
+      "over": "5.556",
+      "f1": "0.233"
+    },
+    {
+      "system": "TF-IDF char",
+      "ours": false,
+      "pearson": "0.281",
+      "ci": "[0.18, 0.39]",
+      "spearman": "0.307",
+      "rmse": "2.391",
+      "mae": "1.907",
+      "over": "35.556",
+      "f1": "0.406"
+    },
+    {
+      "system": "LaBSE",
+      "ours": false,
+      "pearson": "0.178",
+      "ci": "[0.07, 0.30]",
+      "spearman": "0.214",
+      "rmse": "3.45",
+      "mae": "2.767",
+      "over": "75.185",
+      "f1": "0.219"
+    },
+    {
+      "system": "SBERT-Multi",
+      "ours": false,
+      "pearson": "0.081",
+      "ci": "[-0.03, 0.19]",
+      "spearman": "0.103",
+      "rmse": "3.572",
+      "mae": "2.87",
+      "over": "74.815",
+      "f1": "0.219"
+    }
+  ],
+  "languages": [
+    {
+      "language": "French",
+      "setting": "joint training (fr + en + hi)",
+      "ours": 0.698,
+      "baseline": 0.527,
+      "baseline_name": "BERTScore"
+    },
+    {
+      "language": "English",
+      "setting": "joint training (fr + en + hi)",
+      "ours": 0.584,
+      "baseline": 0.412,
+      "baseline_name": "chrF"
+    },
+    {
+      "language": "Hindi",
+      "setting": "joint training (fr + en + hi)",
+      "ours": 0.556,
+      "baseline": 0.373,
+      "baseline_name": "chrF"
+    },
+    {
+      "language": "Hindi",
+      "setting": "zero-shot, trained on English only",
+      "ours": 0.373,
+      "baseline": null,
+      "baseline_name": ""
+    },
+    {
+      "language": "English",
+      "setting": "zero-shot, trained on French only",
+      "ours": 0.459,
+      "baseline": null,
+      "baseline_name": ""
+    },
+    {
+      "language": "Hindi",
+      "setting": "zero-shot, trained on French only",
+      "ours": 0.396,
+      "baseline": null,
+      "baseline_name": ""
+    },
+    {
+      "language": "English",
+      "setting": "zero-shot, trained on Hindi only",
+      "ours": 0.425,
+      "baseline": null,
+      "baseline_name": ""
+    }
+  ],
+  "domain": [
+    {
+      "setting": "in-domain (joint training)",
+      "system": "Ours",
+      "pearson": 0.611,
+      "over": 35.9,
+      "n": 270
+    },
+    {
+      "setting": "in-domain",
+      "system": "BERTScore",
+      "pearson": 0.413,
+      "over": 80.7,
+      "n": 270
+    },
+    {
+      "setting": "out-of-domain insurance->tenancy (silver probe)",
+      "system": "Ours",
+      "pearson": 0.309,
+      "over": 68.3,
+      "n": 202
+    }
+  ],
+  "sanity": [
+    {
+      "system": "Ours + augmentation",
+      "ours": true,
+      "identical": 95.19,
+      "unrelated": 93.7,
+      "unrelated_mean": 1.04
+    },
+    {
+      "system": "Ours, no augmentation",
+      "ours": true,
+      "identical": 0.0,
+      "unrelated": 0.0,
+      "unrelated_mean": 4.26
+    },
+    {
+      "system": "BLEU",
+      "ours": false,
+      "identical": 100.0,
+      "unrelated": 36.67,
+      "unrelated_mean": 1.15
+    },
+    {
+      "system": "SBERT-Multi",
+      "ours": false,
+      "identical": 100.0,
+      "unrelated": 1.48,
+      "unrelated_mean": 4.34
+    },
+    {
+      "system": "TF-IDF char",
+      "ours": false,
+      "identical": 100.0,
+      "unrelated": 0.37,
+      "unrelated_mean": 2.44
+    },
+    {
+      "system": "chrF",
+      "ours": false,
+      "identical": 100.0,
+      "unrelated": 0.0,
+      "unrelated_mean": 2.76
+    },
+    {
+      "system": "BERTScore",
+      "ours": false,
+      "identical": 100.0,
+      "unrelated": 0.0,
+      "unrelated_mean": 8.6
+    },
+    {
+      "system": "LaBSE",
+      "ours": false,
+      "identical": 100.0,
+      "unrelated": 0.0,
+      "unrelated_mean": 5.11
+    }
+  ],
+  "edits": [
+    {
+      "edit": "Condition dropped",
+      "ours": 1.7,
+      "baseline": 1.49,
+      "baseline_name": "chrF"
+    },
+    {
+      "edit": "Negation flipped",
+      "ours": 1.5,
+      "baseline": 0.36,
+      "baseline_name": "SBERT-Multi"
+    },
+    {
+      "edit": "Fact added (hallucination)",
+      "ours": 1.46,
+      "baseline": 0.55,
+      "baseline_name": "TF-IDF char"
+    },
+    {
+      "edit": "Omission",
+      "ours": 1.44,
+      "baseline": 1.48,
+      "baseline_name": "chrF"
+    },
+    {
+      "edit": "Parties swapped",
+      "ours": 1.41,
+      "baseline": 0.27,
+      "baseline_name": "TF-IDF char"
+    },
+    {
+      "edit": "Obligation flipped (shall -> may)",
+      "ours": 0.64,
+      "baseline": 0.14,
+      "baseline_name": "SBERT-Multi"
+    },
+    {
+      "edit": "Scope changed",
+      "ours": 0.59,
+      "baseline": 0.4,
+      "baseline_name": "TF-IDF char"
+    },
+    {
+      "edit": "Number or date changed",
+      "ours": 0.23,
+      "baseline": 0.34,
+      "baseline_name": "LaBSE"
+    }
+  ],
+  "ablation": [
+    {
+      "system": "Ours (main)",
+      "pearson": 0.597,
+      "rmse": 2.051,
+      "over": 43.704,
+      "avg_drop": 1.636,
+      "number_drop": 1.077,
+      "negation_drop": 1.91
+    },
+    {
+      "system": "Ours + legal-edit augmentation",
+      "pearson": 0.496,
+      "rmse": 2.398,
+      "over": 23.704,
+      "avg_drop": 0.879,
+      "number_drop": -0.309,
+      "negation_drop": 2.768
+    }
+  ]
+}

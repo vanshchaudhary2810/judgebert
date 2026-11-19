@@ -198,9 +198,11 @@ def save_model(model: LMPModel, tokenizer, path: str):
 
 
 def load_model(path: str, cfg: Config):
-    """Reload a saved model (encoder architecture is rebuilt from cfg.model_name)."""
+    """Reload a saved model. Works offline: the encoder is rebuilt from the config saved next to the
+    weights (falls back to downloading cfg.model_name for folders saved without a config)."""
     import os
     tokenizer = AutoTokenizer.from_pretrained(path)
-    model = LMPModel(cfg.model_name, cfg.dropout)
+    has_cfg = os.path.exists(os.path.join(path, "config.json"))
+    model = LMPModel(cfg.model_name, cfg.dropout, config_dir=path if has_cfg else None)
     model.load_state_dict(torch.load(os.path.join(path, "lmp_model.pt"), map_location="cpu"))
     return model.to(get_device(cfg)).eval(), tokenizer

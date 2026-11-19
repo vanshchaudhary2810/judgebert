@@ -25,6 +25,22 @@ The notebook is self-contained (it writes the `lmp/` package with `%%writefile`)
 Locally: `pip install -r requirements.txt && python run_experiments.py [--human_csv data/x.csv] [--fast]`.
 CPU smoke test without downloads: `python tests/smoke_test.py`.
 
+## Web app (frontend + backend)
+
+A FastAPI backend serves the trained model; a browser frontend (`app/static/`) has four pages:
+**Analyze** (one clause: score, decision, legal error types, rule evidence, word attributions, comparison with chrF/BLEU),
+**Batch** (score a CSV of pairs, download results), **Results** (all experiment tables and figures) and **How it works**.
+API documentation is generated at `/docs`.
+
+1. Download the trained model folder `lmp_model` from Google Drive (`My Drive/judgebert_final/lmp_model`) into `models/`
+   so that `models/lmp_model/lmp_model.pt` exists.
+2. Run `./run_app.sh` (first run installs packages into `.venv`), then open http://localhost:8000.
+
+Manual start: `pip install -r requirements-app.txt` then `python -m uvicorn app.server:app --port 8000`.
+Runs on CPU, Apple GPU (MPS) or CUDA. The model loads offline from its own folder.
+
+Results: open [`RESULTS.md`](RESULTS.md) (generated from `results/` by `scripts/make_results_summary.py`).
+
 ## The five required experiments
 
 | Brief | Code | What it reports |

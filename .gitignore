@@ -4,3 +4,5 @@ __pycache__/
 outputs/
 external/
 .ipynb_checkpoints/
+models/
+.venv/

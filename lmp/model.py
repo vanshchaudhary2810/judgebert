@@ -9,15 +9,19 @@ this model is multilingual and has three heads on a shared encoder:
 """
 import torch
 import torch.nn as nn
-from transformers import AutoModel
+from transformers import AutoConfig, AutoModel
 
 from .config import DECISIONS, ERROR_TYPES
 
 
 class LMPModel(nn.Module):
-    def __init__(self, model_name: str, dropout: float = 0.1, n_errors: int = len(ERROR_TYPES)):
+    def __init__(self, model_name: str, dropout: float = 0.1, n_errors: int = len(ERROR_TYPES),
+                 config_dir: str = None):
         super().__init__()
-        self.encoder = AutoModel.from_pretrained(model_name)
+        if config_dir:   # rebuild the architecture from a saved config (no download; weights loaded after)
+            self.encoder = AutoModel.from_config(AutoConfig.from_pretrained(config_dir))
+        else:
+            self.encoder = AutoModel.from_pretrained(model_name)
         h = self.encoder.config.hidden_size
         self.dropout = nn.Dropout(dropout)
         self.score_head = nn.Sequential(nn.Linear(h, h // 2), nn.GELU(), nn.Dropout(dropout), nn.Linear(h // 2, 1))

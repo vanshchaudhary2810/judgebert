@@ -1,0 +1,12 @@
+# Web app (backend + frontend). Install with: pip install -r requirements-app.txt
+torch>=2.6
+transformers>=4.45
+sentencepiece>=0.2
+pandas>=2.0
+numpy>=1.26
+scikit-learn>=1.4
+scipy>=1.11
+sacrebleu>=2.4
+fastapi>=0.110
+uvicorn>=0.29
+python-multipart>=0.0.9
