@@ -1,15 +1,9 @@
-"""Build YOUR dataset: generate simplifications of real legal clauses with open LLMs on Colab.
-
-Mirrors the JUDGEBERT setup (zero-shot prompt of Kew et al. 2023, temperature 1.0, top-p 0.9) but
-uses open models and *several* systems, so the test set is not limited to one model's error profile.
-"""
 from typing import List
 
 import pandas as pd
 import torch
 
 
-# The paper's prompt (Appendix A), translated; the language instruction is in capitals as in the paper.
 PROMPTS = {
     "en": "Rewrite the complex sentence with simple sentence(s). Keep the meaning the same, but make it simpler. "
           "ANSWER IN ENGLISH!\n\nComplex: {input}",
@@ -17,7 +11,6 @@ PROMPTS = {
           "केवल हिंदी में उत्तर दें!\n\nजटिल वाक्य: {input}",
 }
 
-# Small instruction models that fit a free Colab T4 and handle English + Hindi reasonably.
 DEFAULT_SYSTEMS = ["Qwen/Qwen2.5-1.5B-Instruct", "Qwen/Qwen2.5-3B-Instruct"]
 
 
@@ -49,7 +42,6 @@ def simplify_with_llm(texts: List[str], langs: List[str], model_name: str, max_n
 
 
 def generate_pairs(sources: pd.DataFrame, systems: List[str] = None, seed: int = 0) -> pd.DataFrame:
-    """sources: columns source_id, lang, domain, context, original -> one row per (clause, system)."""
     torch.manual_seed(seed)
     systems = systems or DEFAULT_SYSTEMS
     rows = []
@@ -63,8 +55,6 @@ def generate_pairs(sources: pd.DataFrame, systems: List[str] = None, seed: int =
 
 
 def make_annotation_sheet(pairs: pd.DataFrame, path: str, n_annotators: int = 3, seed: int = 0) -> pd.DataFrame:
-    """Shuffled sheet for annotators. The `system` column is kept for analysis but should be hidden
-    from annotators (as in the paper) - e.g. hide it in Google Sheets."""
     sheet = pairs.sample(frac=1.0, random_state=seed).reset_index(drop=True).copy()
     sheet.insert(0, "pair_id", [f"H{i:04d}" for i in range(len(sheet))])
     if "concept_id" not in sheet:
@@ -73,6 +63,6 @@ def make_annotation_sheet(pairs: pd.DataFrame, path: str, n_annotators: int = 3,
         sheet[f"annotator_{k}"] = float("nan")
     sheet["errors"] = ""
     sheet["notes"] = ""
-    sheet.to_csv(path, index=False, encoding="utf-8-sig")   # utf-8-sig so Excel shows Hindi correctly
+    sheet.to_csv(path, index=False, encoding="utf-8-sig")
     print(f"Wrote {len(sheet)} pairs to {path}")
     return sheet

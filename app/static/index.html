@@ -3,109 +3,93 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Legal Meaning Checker</title>
+<title>Legal Meaning Preservation Checker</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<header class="topbar">
-  <div class="wrap topbar-inner">
-    <div class="brand">
-      <span class="brand-mark" aria-hidden="true">§</span>
+<div class="page">
+  <header>
+    <div class="head-row">
       <div>
-        <div class="brand-name">Legal Meaning Checker</div>
-        <div class="brand-sub">Does a simplified legal sentence keep the law? · English · हिन्दी · Français</div>
+        <h1>Legal Meaning Preservation Checker</h1>
+        <p class="sub">CSET 346 NLP project &middot; extension of JUDGEBERT to English and Hindi</p>
       </div>
+      <p id="status" class="status">connecting&hellip;</p>
     </div>
-    <div id="status" class="status status-wait">Connecting…</div>
-  </div>
-  <nav class="wrap tabs" role="tablist">
-    <button class="tab active" data-tab="analyze" role="tab">Analyze</button>
-    <button class="tab" data-tab="batch" role="tab">Batch</button>
-    <button class="tab" data-tab="results" role="tab">Results</button>
-    <button class="tab" data-tab="about" role="tab">How it works</button>
-  </nav>
-</header>
+    <nav>
+      <a href="#" class="tab active" data-tab="analyze">Analyze</a>
+      <a href="#" class="tab" data-tab="batch">Batch</a>
+      <a href="#" class="tab" data-tab="results">Results</a>
+      <a href="#" class="tab" data-tab="about">About</a>
+    </nav>
+  </header>
 
-<main class="wrap">
-  <!-- ============================== ANALYZE ============================== -->
   <section id="tab-analyze" class="panel active">
-    <div class="grid">
-      <div class="card input-card">
-        <label class="field-label" for="original">Original legal text</label>
-        <textarea id="original" rows="6" placeholder="Paste a clause from a policy, contract or Act…"></textarea>
-        <label class="field-label" for="simplified">Simplified version</label>
-        <textarea id="simplified" rows="5" placeholder="Paste the plain-language version to check…"></textarea>
-        <div class="row">
-          <label class="field-label inline" for="lang">Language</label>
+    <div class="cols">
+      <div class="col-in">
+        <label for="original">Original legal text</label>
+        <textarea id="original" rows="6"></textarea>
+        <label for="simplified">Simplified text</label>
+        <textarea id="simplified" rows="5"></textarea>
+        <div class="controls">
+          <label for="lang" class="inline">Language</label>
           <select id="lang">
-            <option value="auto">Detect automatically</option>
+            <option value="auto">auto-detect</option>
             <option value="en">English</option>
             <option value="hi">Hindi</option>
             <option value="fr">French</option>
           </select>
-          <label class="check"><input type="checkbox" id="words" checked> Word attributions</label>
-          <button id="analyze" class="btn-primary">Check meaning</button>
+          <label class="inline check"><input type="checkbox" id="words" checked> word attributions</label>
         </div>
-        <div class="examples">
-          <div class="field-label">Try an example</div>
-          <div id="example-list" class="chips"></div>
+        <div class="controls">
+          <select id="example-list"><option value="">Load an example&hellip;</option></select>
+          <button id="analyze">Analyze</button>
         </div>
       </div>
-
-      <div class="card result-card" id="result">
-        <div class="empty">
-          <div class="empty-mark">§</div>
-          <p>Paste an original clause and its simplification, or pick an example, then press <b>Check meaning</b>.</p>
-          <p class="muted">The model scores legal meaning preservation from 1 to 10, names the legal errors it sees, and shows which words drove the score.</p>
-        </div>
+      <div class="col-out" id="result">
+        <p class="hint">Enter an original clause and a simplified version, then click Analyze.</p>
       </div>
     </div>
   </section>
 
-  <!-- ============================== BATCH ============================== -->
   <section id="tab-batch" class="panel">
-    <div class="card">
-      <h2>Check many pairs at once</h2>
-      <p class="muted">Upload a CSV with the columns <code>original</code>, <code>simplified</code> and optionally <code>lang</code> (en, hi, fr). Up to 500 rows.</p>
-      <div class="row">
-        <input type="file" id="batch-file" accept=".csv,text/csv">
-        <button id="batch-run" class="btn-primary">Score file</button>
-        <button id="batch-template" class="btn-ghost">Download a template</button>
-        <button id="batch-download" class="btn-ghost" disabled>Download results</button>
-      </div>
-      <div id="batch-out"></div>
+    <h2>Batch scoring</h2>
+    <p>Upload a CSV file with columns <code>original</code>, <code>simplified</code> and optionally <code>lang</code> (en, hi or fr). Maximum 500 rows.</p>
+    <div class="controls">
+      <input type="file" id="batch-file" accept=".csv,text/csv">
+      <button id="batch-run">Score file</button>
+      <button id="batch-template" class="plain">Download template</button>
+      <button id="batch-download" class="plain" disabled>Download results</button>
     </div>
+    <div id="batch-out"></div>
   </section>
 
-  <!-- ============================== RESULTS ============================== -->
   <section id="tab-results" class="panel">
-    <div id="results-out"><div class="card muted">Loading results…</div></div>
+    <div id="results-out"><p class="hint">Loading&hellip;</p></div>
   </section>
 
-  <!-- ============================== ABOUT ============================== -->
-  <section id="tab-about" class="panel">
-    <div class="card prose">
-      <h2>How the checker works</h2>
-      <ol class="pipeline">
-        <li><b>Input.</b> The original clause and its simplification are read together, as one sequence, by a multilingual transformer (XLM-RoBERTa) fine-tuned for this task.</li>
-        <li><b>Three outputs.</b> One shared encoder feeds three heads: a <b>score</b> from 1 to 10, a <b>decision</b> (Preserved ≥ 6.5, Not preserved ≤ 2, otherwise Partially preserved) and nine <b>legal error types</b>.</li>
-        <li><b>Rule check.</b> A transparent legal diff compares obligations and permissions (shall / may), negations, exceptions (unless, provided that), conditions, numbers and dates, scope words and the parties.</li>
-        <li><b>Word attributions.</b> Integrated Gradients traces the score back to individual words: red words pulled the score down.</li>
-      </ol>
-      <h3>Training data</h3>
-      <p>FrJUDGE (Beauchemin et al., EMNLP 2025): 297 French insurance clauses and simplifications, each scored by five law students. The pairs were translated into English and Hindi with NLLB-200, keeping the human scores, and extended with identical (score 10) and unrelated (score 1) pairs and rule-made legal edits of English and Hindi clauses.</p>
-      <h3>Limits</h3>
-      <ul>
-        <li>English and Hindi scores were learned from translated French judgments; our team's own annotations are the next step.</li>
-        <li>The model is weakest on changed numbers and dates; the rule check covers those.</li>
-        <li>Long inputs are cut at 256 sub-word tokens.</li>
-        <li>An aid for checking simplifications, not legal advice.</li>
-      </ul>
-    </div>
+  <section id="tab-about" class="panel text">
+    <h2>About</h2>
+    <p>The checker compares an original legal sentence with a simplified version and estimates how much of the legal meaning is kept, on a scale from 1 to 10.</p>
+    <h3>Method</h3>
+    <ol>
+      <li>Both texts are encoded together by a fine-tuned multilingual transformer (XLM-RoBERTa base).</li>
+      <li>Three output heads give the score, a decision (preserved &ge; 6.5, not preserved &le; 2, otherwise partially preserved) and nine legal error types.</li>
+      <li>A rule-based comparison checks obligations and permissions, negation, exceptions, conditions, numbers and dates, scope words and the parties.</li>
+      <li>Integrated Gradients shows which words lowered or raised the score.</li>
+    </ol>
+    <h3>Data</h3>
+    <p>FrJUDGE (Beauchemin et al., EMNLP 2025): 297 French insurance clauses with simplifications, each scored by five law students. The pairs were translated into English and Hindi with NLLB-200, and extended with identical, unrelated and rule-edited pairs.</p>
+    <h3>Limitations</h3>
+    <ul>
+      <li>English and Hindi scores were learned from translated French judgments.</li>
+      <li>The model is weakest on changed numbers and dates.</li>
+      <li>Inputs longer than 256 sub-word tokens are truncated.</li>
+      <li>This is a research tool, not legal advice.</li>
+    </ul>
+    <p class="small"><a href="/docs" target="_blank">API documentation</a></p>
   </section>
-</main>
-
-<footer class="wrap footer">CSET 346 NLP project · JUDGEBERT extension to English and Hindi · <a href="/docs" target="_blank">API docs</a></footer>
+</div>
 <script src="app.js"></script>
 </body>
 </html>

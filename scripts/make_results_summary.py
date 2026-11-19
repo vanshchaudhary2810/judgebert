@@ -1,8 +1,3 @@
-"""Turn the CSVs in results/ into RESULTS.md (read on GitHub) and results/summary.json (read by the web app).
-
-    python scripts/make_results_summary.py            # uses ./results
-    python scripts/make_results_summary.py path/to/outputs
-"""
 import json
 import os
 import sys
@@ -11,7 +6,7 @@ import pandas as pd
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OURS = "Ours (multi-task LMP)"
-PAPER_FRENCH = 0.74          # JUDGEBERT (Beauchemin et al., 2025), French-only model, Table 5
+PAPER_FRENCH = 0.74
 NICE = {"TF-IDF(char)": "TF-IDF char", "BERTScore(XLM-R)": "BERTScore", "SBERT-Multi": "SBERT-Multi",
         "chrF": "chrF", "BLEU": "BLEU", "LaBSE": "LaBSE"}
 EDIT_NAMES = {"drop_condition": "Condition dropped", "negation_flip": "Negation flipped",
@@ -22,7 +17,6 @@ EDIT_NAMES = {"drop_condition": "Condition dropped", "negation_flip": "Negation 
 
 
 def num(x):
-    """'0.576 ± 0.018' -> 0.576 ; 0.41 -> 0.41"""
     return float(str(x).split("±")[0].strip())
 
 

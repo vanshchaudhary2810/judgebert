@@ -1,21 +1,4 @@
-"""Parallel English-Hindi seed corpus of legal clauses (insurance + tenancy).
-
-Each concept has, for both languages:
-    context  - the definition / heading that precedes the clause in the document
-    original - the clause in formal legal language
-    simple   - a hand-written, meaning-preserving plain-language simplification
-
-These clauses were written for this project in the style of Indian insurance policies
-and residential rent agreements (they are not copied from any real document).
-
-IMPORTANT: this seed corpus + the rule-based perturbations in `perturb.py` produce
-*silver* LMP labels. They let you run and debug the whole pipeline today and are useful
-as data augmentation, but the research results in your paper must come from the
-human-annotated dataset (see `annotation_template.csv` and `data.load_annotated_csv`).
-"""
-
 SEED = [
-    # ============================ INSURANCE ============================
     {
         "cid": "INS01", "domain": "insurance",
         "en": (
@@ -172,7 +155,6 @@ SEED = [
             "वाहन बेचने या हस्तांतरित करने पर यह पॉलिसी अपने आप खत्म हो जाएगी, जब तक कि बीमाकर्ता ने पहले लिखित में सहमति न दी हो।",
         ),
     },
-    # ============================ TENANCY ============================
     {
         "cid": "TEN01", "domain": "tenancy",
         "en": (
@@ -333,7 +315,6 @@ SEED = [
 
 
 def seed_rows():
-    """Flatten SEED into rows: one per (concept, language)."""
     rows = []
     for item in SEED:
         for lang in ("en", "hi"):

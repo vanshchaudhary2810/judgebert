@@ -1,12 +1,3 @@
-"""Controlled legal perturbations (English + Hindi) and silver-label generation.
-
-Each perturbation takes a faithful simplification and introduces exactly one legally
-meaningful change (obligation -> permission, dropped exception, changed number, ...).
-They serve three purposes:
-  1. silver training/augmentation data (`build_silver_dataset`)
-  2. the robustness test suite for Experiment 5 (`perturbation_suite`)
-  3. identical / unrelated sanity pairs for Experiment 4 (`build_sanity_pairs`)
-"""
 import random
 import re
 from typing import Callable, Dict, List, Optional, Tuple
@@ -16,12 +7,8 @@ import pandas as pd
 
 from .seed_data import seed_rows
 
-# --------------------------------------------------------------------------------------
-# helpers
-# --------------------------------------------------------------------------------------
 
 def _earliest(text: str, rules: List[Tuple[str, str]], flags=0):
-    """Apply the rule whose match starts earliest (longest match wins ties). Returns new text or None."""
     best = None
     for pat, rep in rules:
         m = re.search(pat, text, flags)
@@ -39,7 +26,6 @@ def _tidy(text: str, lang: str) -> str:
     text = re.sub(r",\s*([.।])", r"\1", text)
     text = re.sub(r"([.।])\s*([.।])", r"\1", text)
     if lang == "en":
-        # capitalise sentence starts
         text = re.sub(r"(^|[.!?]\s+)([a-z])", lambda m: m.group(1) + m.group(2).upper(), text)
         if not text.endswith((".", "!", "?")):
             text += "."
@@ -59,12 +45,7 @@ def _split_sentences(text: str, lang: str) -> List[str]:
     return [s.strip() + "।" for s in text.strip().split("।") if s.strip()]
 
 
-# --------------------------------------------------------------------------------------
-# perturbations: f(text, lang, domain, rng) -> Optional[str]
-# --------------------------------------------------------------------------------------
-
 def obligation_flip(text, lang, domain=None, rng=None):
-    """must/shall <-> may/can  |  ना होगा <-> सकता है"""
     if lang == "en":
         rules = [
             (r"\bmust not\b", "may"), (r"\bshall not\b", "may"),
@@ -82,7 +63,6 @@ def obligation_flip(text, lang, domain=None, rng=None):
 
 
 def negation_flip(text, lang, domain=None, rng=None):
-    """Remove the first negation, or insert one if there is none -> contradiction."""
     if lang == "en":
         if re.search(r"(?<!If )\bnot\b", text):
             out = re.sub(r"\s*(?<!If )\bnot\b", "", text, count=1)
@@ -197,9 +177,6 @@ def omission(text, lang, domain=None, rng=None):
     sents = _split_sentences(text, lang)
     if len(sents) >= 2:
         return _tidy(" ".join(sents[:-1]), lang)
-    # Otherwise drop the last comma-separated clause (", " so Indian-format numbers survive),
-    # but never a clause that is an exception/condition (those have their own perturbations)
-    # and never the main clause.
     if ", " in text:
         head, tail = text.rsplit(", ", 1)
         tail_s = tail.strip()
@@ -212,7 +189,6 @@ def omission(text, lang, domain=None, rng=None):
             tail_has_verb = re.search(r"(होगा|होगी|होंगे|है|सकता|सकती|जाएगा|जाएगी|करेगा)\s*।?$", tail_s)
             if len(tail_s.split()) >= 2 and not is_exc and not tail_has_verb:
                 return _tidy(head, lang)
-            # drop the middle item of a list "A, B या C"
             out = re.sub(r", (?!तो )([^,]+?) या ", " या ", text, count=1)
             if out != text:
                 return _tidy(out, lang)
@@ -266,7 +242,6 @@ def entity_swap(text, lang, domain=None, rng=None):
 
 
 def benign_paraphrase(text, lang, domain=None, rng=None):
-    """Meaning-preserving rewording (should keep a high LMP)."""
     if lang == "en":
         rules = [(r"\bmust not\b", "is not allowed to"), (r"\bmust\b", "has to"),
                  (r"\bwithin\b", "no later than"), (r"\bwritten notice\b", "notice in writing"),
@@ -280,7 +255,6 @@ def benign_paraphrase(text, lang, domain=None, rng=None):
     return _tidy(out, lang) if out != text else None
 
 
-# name -> (function, error type, silver severity on the 1-10 scale)
 PERTURBATIONS: Dict[str, Tuple[Callable, str, float]] = {
     "negation_flip": (negation_flip, "contradiction", 2.0),
     "entity_swap": (entity_swap, "entity", 2.5),
@@ -294,16 +268,11 @@ PERTURBATIONS: Dict[str, Tuple[Callable, str, float]] = {
 }
 
 
-# --------------------------------------------------------------------------------------
-# dataset builders
-# --------------------------------------------------------------------------------------
-
 def _clip(x):
     return float(np.clip(x, 1.0, 10.0))
 
 
 def build_silver_dataset(seed: int = 13, doubles_per_source: int = 1) -> pd.DataFrame:
-    """Faithful + benign + single + double perturbations for every seed clause."""
     rng = random.Random(seed)
     nrng = np.random.default_rng(seed)
     out = []
@@ -342,11 +311,6 @@ def build_silver_dataset(seed: int = 13, doubles_per_source: int = 1) -> pd.Data
 
 
 def build_sanity_pairs(df: pd.DataFrame, seed: int = 7) -> pd.DataFrame:
-    """Identical pairs (expected LMP 10) and unrelated pairs (expected LMP 1).
-
-    Unrelated pairs follow the JUDGEBERT paper: both sides are legal text with a shared
-    lexicon (same language, same domain) but describe different clauses.
-    """
     rng = random.Random(seed)
     src = df.drop_duplicates("source_id")[["source_id", "concept_id", "lang", "domain", "context", "original"]]
     pool = df[df.perturbation.isin(["faithful"])] if "perturbation" in df else df
@@ -370,13 +334,9 @@ def build_sanity_pairs(df: pd.DataFrame, seed: int = 7) -> pd.DataFrame:
 
 
 def perturbation_suite(base: pd.DataFrame) -> pd.DataFrame:
-    """For every preserved (faithful) pair in `base`, create one variant per perturbation type.
-
-    Works on human-annotated data too: pass the pairs whose human LMP >= 7.
-    """
     rng = random.Random(0)
     rows = []
-    base = base[base["lang"].isin(["en", "hi"])]          # the edit rules exist for English and Hindi
+    base = base[base["lang"].isin(["en", "hi"])]
     for _, r in base.iterrows():
         rows.append({**r.to_dict(), "variant": "faithful"})
         for name, (fn, etype, _) in PERTURBATIONS.items():
@@ -388,13 +348,6 @@ def perturbation_suite(base: pd.DataFrame) -> pd.DataFrame:
 
 def real_pair_edits(df: pd.DataFrame, min_lmp: float = 7.0, seed: int = 0,
                     priority=("change_number", "negation_flip", "obligation_flip")) -> pd.DataFrame:
-    """Legal-edit augmentation on REAL pairs: take well-preserved English/Hindi pairs (human or projected
-    LMP >= min_lmp) and create two edited copies of the simplification: one edit from `priority` (the
-    model's weak spots in Exp 5a) and one other legal edit.
-
-    New label = min(original LMP, severity of the edit) and the edit's error type. Pass only TRAINING
-    pairs; the new rows keep their concept_id/split, so no edited copy of a test clause is ever trained on.
-    """
     rng = random.Random(seed)
     nrng = np.random.default_rng(seed)
     base = df[df["lang"].isin(["en", "hi"]) & (df["lmp"] >= min_lmp)]

@@ -1,12 +1,3 @@
-"""Explainable multi-task cross-encoder for Legal Meaning Preservation (LMP).
-
-Like JUDGEBERT, the original and simplified texts are concatenated with a separator and
-fed to one transformer. Unlike JUDGEBERT (single regression head, French-only CamemBERT),
-this model is multilingual and has three heads on a shared encoder:
-    score head    -> LMP in [1, 10]
-    decision head -> Not / Partially / Preserved
-    error head    -> multi-label legal error types (omission, obligation_permission, ...)
-"""
 import torch
 import torch.nn as nn
 from transformers import AutoConfig, AutoModel
@@ -18,7 +9,7 @@ class LMPModel(nn.Module):
     def __init__(self, model_name: str, dropout: float = 0.1, n_errors: int = len(ERROR_TYPES),
                  config_dir: str = None):
         super().__init__()
-        if config_dir:   # rebuild the architecture from a saved config (no download; weights loaded after)
+        if config_dir:
             self.encoder = AutoModel.from_config(AutoConfig.from_pretrained(config_dir))
         else:
             self.encoder = AutoModel.from_pretrained(model_name)
@@ -43,6 +34,6 @@ class LMPModel(nn.Module):
         hidden = self.encoder(**kwargs).last_hidden_state
         pooled = self.dropout(self.pool(hidden, attention_mask))
         raw = self.score_head(pooled).squeeze(-1)
-        score = 1.0 + 9.0 * torch.sigmoid(raw)       # bounded to the 1-10 Likert range
+        score = 1.0 + 9.0 * torch.sigmoid(raw)
         return {"score": score, "decision_logits": self.decision_head(pooled),
                 "error_logits": self.error_head(pooled)}

@@ -1,9 +1,3 @@
-"""Command-line entry point (same as the Colab notebook).
-
-    python run_experiments.py                          # silver demo data
-    python run_experiments.py --human_csv data/annotated.csv --model google/muril-base-cased
-    python run_experiments.py --fast                   # 1 seed, fewer epochs
-"""
 import argparse
 
 from lmp.config import Config

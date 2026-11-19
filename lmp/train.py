@@ -1,4 +1,3 @@
-"""Training / inference for the LMP cross-encoder (plain PyTorch loop, works on Colab GPU or CPU)."""
 import copy
 import math
 import random
@@ -31,7 +30,6 @@ def get_device(cfg: Config) -> torch.device:
 
 
 def first_input(row, cfg: Config) -> str:
-    """Segment A = [context] + original. Segment B = simplified."""
     ctx = str(row.get("context", "") or "")
     if cfg.use_context and ctx.strip():
         return f"{ctx} || {row['original']}"
@@ -73,11 +71,9 @@ def make_collate(tokenizer, cfg: Config):
 def multitask_loss(out, batch, cfg: Config, pos_weight=None) -> Tuple[torch.Tensor, Dict[str, float]]:
     pred, gold = out["score"].float(), batch["lmp"]
     diff = pred - gold
-    # asymmetric MSE: over-estimation (approving a bad simplification) costs more
     w = torch.where(diff > 0, torch.full_like(diff, cfg.over_penalty), torch.ones_like(diff))
     l_score = (w * diff.pow(2)).mean() / cfg.over_penalty
     l_dec = F.cross_entropy(out["decision_logits"].float(), batch["decision"], ignore_index=-100)
-    # pos_weight balances rare error types (each type occurs in only a small share of pairs)
     bce = F.binary_cross_entropy_with_logits(out["error_logits"].float(), batch["errors"], reduction="none",
                                              pos_weight=pos_weight).mean(1)
     l_err = (bce * batch["err_mask"]).sum() / batch["err_mask"].sum().clamp(min=1.0)
@@ -118,7 +114,6 @@ def _quick_eval(model, tokenizer, df, cfg) -> Dict[str, float]:
 
 def train_model(train_df: pd.DataFrame, val_df: pd.DataFrame, cfg: Config, seed: int = 42,
                 verbose: bool = True):
-    """Fine-tune the multi-task cross-encoder. Returns (model, tokenizer, history)."""
     set_seed(seed)
     device = get_device(cfg)
     tokenizer = AutoTokenizer.from_pretrained(cfg.model_name)
@@ -133,7 +128,6 @@ def train_model(train_df: pd.DataFrame, val_df: pd.DataFrame, cfg: Config, seed:
     total = max(1, len(dl) * cfg.epochs)
     sched = get_linear_schedule_with_warmup(opt, int(cfg.warmup_ratio * total), total)
     use_amp = cfg.fp16 and device.type == "cuda"
-    # class-balancing weights for the error-type head, estimated on rows with known error labels
     ev = [errors_to_multihot(v, ERROR_TYPES) for v in train_df.get("errors", pd.Series([np.nan] * len(train_df)))]
     known = np.array([v for v, m in ev if m > 0])
     if len(known):
@@ -168,8 +162,7 @@ def train_model(train_df: pd.DataFrame, val_df: pd.DataFrame, cfg: Config, seed:
             print(f"  epoch {epoch:2d} | train loss {np.mean(run):.3f} | val RMSE {val['rmse']:.3f} "
                   f"| val r {val['pearson']:.3f} | {time.time() - t0:.0f}s")
         if epoch < cfg.min_epochs:
-            continue                      # let the randomly initialised heads settle first
-        # lower is better: -Pearson (+ a small RMSE term to break ties), or plain RMSE
+            continue
         crit = (-val["pearson"] + 0.02 * val["rmse"]) if cfg.select_metric == "pearson" else val["rmse"]
         if crit < best - 1e-4:
             best, bad = crit, 0
@@ -198,8 +191,6 @@ def save_model(model: LMPModel, tokenizer, path: str):
 
 
 def load_model(path: str, cfg: Config):
-    """Reload a saved model. Works offline: the encoder is rebuilt from the config saved next to the
-    weights (falls back to downloading cfg.model_name for folders saved without a config)."""
     import os
     tokenizer = AutoTokenizer.from_pretrained(path)
     has_cfg = os.path.exists(os.path.join(path, "config.json"))

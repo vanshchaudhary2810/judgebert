@@ -1,9 +1,6 @@
-"""Central configuration for the Explainable Multilingual LMP project."""
 from dataclasses import dataclass, field
 from typing import List, Optional
 
-# Legal error types (multi-label). Matches the course brief: omission, hallucination,
-# contradiction, obligation/permission, conditions, exceptions, scope, dates/numbers, entities.
 ERROR_TYPES: List[str] = [
     "omission",
     "hallucination",
@@ -21,17 +18,10 @@ DECISIONS: List[str] = ["Not Preserved", "Partially Preserved", "Preserved"]
 
 @dataclass
 class Config:
-    # ---- model ----
-    # Good multilingual choices that cover English + Hindi:
-    #   "xlm-roberta-base"            (default, robust)
-    #   "google/muril-base-cased"     (trained on 17 Indian languages + English)
-    #   "ai4bharat/IndicBERTv2-MLM-only"
-    #   "xlm-roberta-large"           (best quality, needs A100 / small batch)
     model_name: str = "xlm-roberta-base"
     max_len: int = 256
     dropout: float = 0.1
 
-    # ---- training ----
     epochs: int = 20
     batch_size: int = 16
     lr: float = 3e-5
@@ -39,32 +29,24 @@ class Config:
     weight_decay: float = 0.01
     warmup_ratio: float = 0.1
     patience: int = 6
-    min_epochs: int = 3          # no checkpoint selection / early stopping before this epoch
-    # checkpoint selection: 'pearson' (correlation with humans, the paper's main metric; RMSE breaks ties)
-    # or 'rmse'. RMSE alone tends to keep early, under-trained checkpoints that just predict the mean.
+    min_epochs: int = 3
     select_metric: str = "pearson"
     seeds: List[int] = field(default_factory=lambda: [42, 43, 44])
     fp16: bool = True
 
-    # ---- loss ----
-    # Over-estimating legal meaning preservation is the dangerous direction
-    # (it approves bad simplifications), so it is penalised more heavily.
     over_penalty: float = 2.0
     w_decision: float = 0.5
     w_errors: float = 0.5
 
-    # ---- data ----
     use_context: bool = False
-    data_augmentation: bool = True   # add identical (=10) and unrelated (=1) pairs to training
-    legal_edit_aug: bool = False     # add single legal edits of real well-preserved pairs (Exp 5d)
+    data_augmentation: bool = True
+    legal_edit_aug: bool = False
     test_size: float = 0.2
     val_size: float = 0.1
 
-    # ---- decision thresholds on the 1-10 LMP scale (paper: 7-10 accurate, 2-6 imprecise, 1 off-track) ----
     preserved_min: float = 6.5
     not_preserved_max: float = 2.0
 
-    # ---- baselines ----
     bertscore_model: str = "xlm-roberta-base"
     bertscore_layer: int = 9
     sbert_models: List[str] = field(default_factory=lambda: [

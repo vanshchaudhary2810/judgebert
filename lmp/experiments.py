@@ -1,11 +1,3 @@
-"""The five experiments required by the CSET 346 project brief.
-
-Exp 1  Generic semantic similarity baselines vs. the JUDGEBERT-style LMP model
-Exp 2  English vs. Hindi (+ cross-lingual zero-shot transfer)
-Exp 3  New-domain generalisation (insurance <-> tenancy) and sentence-only vs. contextual input
-Exp 4  Identical / unrelated sanity checks (with vs. without data augmentation)
-Exp 5  Perturbation robustness, legal-error-type classification and qualitative error analysis (>=15 cases)
-"""
 import copy
 import gc
 import json
@@ -47,7 +39,6 @@ def _free(model):
 class Runner:
     def __init__(self, cfg: Config, human_csv: Optional[str] = None, ablation_seeds: Optional[List[int]] = None,
                  split_seed: int = 42, df: Optional[pd.DataFrame] = None, data_name: str = ""):
-        """human_csv: your annotated CSV | df: a ready dataset (e.g. lmp.frjudge.frjudge_dataset()) | neither: silver demo."""
         self.cfg = cfg
         self.human = human_csv is not None or df is not None
         self.ablation_seeds = ablation_seeds or cfg.seeds[:1]
@@ -55,12 +46,10 @@ class Runner:
         self.df = df.reset_index(drop=True) if df is not None else prepare_data(cfg, human_csv)
         self.data_name = data_name or ("human CSV" if human_csv else ("custom" if df is not None else "SILVER"))
         self.train, self.val, self.test = split_data(self.df, cfg, seed=split_seed)
-        # silver pairs are extra training data only when real human data is used
         self.extra_silver = None
         if self.human:
             silver = build_silver_dataset()
             held_out = set(self.val["original"]) | set(self.test["original"])
-            # never let a silver variant of a val/test clause leak into training
             self.extra_silver = silver[~silver["original"].isin(held_out)].reset_index(drop=True)
             print(f"+ {len(self.extra_silver)} silver pairs used as extra training data")
         self.report: List[str] = []
@@ -70,7 +59,6 @@ class Runner:
         print("languages:", self.df["lang"].value_counts().to_dict())
         self.df.to_csv(os.path.join(cfg.output_dir, "dataset_used.csv"), index=False)
 
-    # ------------------------------------------------------------------ core
     def fit_predict(self, train: pd.DataFrame, val: pd.DataFrame, eval_sets: Dict[str, pd.DataFrame],
                     cfg: Optional[Config] = None, seeds: Optional[List[int]] = None, keep_model=False,
                     augment_train=True, tag=""):
@@ -109,7 +97,6 @@ class Runner:
         print(text)
         self.report.append(text)
 
-    # ------------------------------------------------------------------ Exp 1
     def exp1_baselines_vs_model(self):
         cfg = self.cfg
         test = self.test.copy()
@@ -149,7 +136,6 @@ class Runner:
         self._plot_scatter(y)
         return table
 
-    # ------------------------------------------------------------------ Exp 2
     def exp2_languages(self):
         cfg, test = self.cfg, self.test
         rows = []
@@ -163,7 +149,6 @@ class Runner:
                          **regression_metrics(y, self.pred_test.loc[m, "pred_score"], cfg)})
         langs = sorted(self.df["lang"].unique())
         if len(langs) >= 2:
-            # zero-shot transfer pairs (French is only ever a source language)
             for src, tgt in [(s, t) for s in langs for t in langs if s != t and t != "fr"]:
                 tr = self.train[self.train["lang"] == src]
                 va = self.val[self.val["lang"] == src]
@@ -184,12 +169,10 @@ class Runner:
                   table[["setting", "test_lang", "system", "pearson", "spearman", "rmse", "mae", "over_%", "n"]])
         return table
 
-    # ------------------------------------------------------------------ Exp 3
     def exp3_domain_and_context(self):
         cfg = self.cfg
         rows = []
         domains = sorted(self.df["domain"].unique())
-        # in-domain numbers from the main model
         for d in domains:
             m = (self.test["domain"] == d).to_numpy()
             rows.append({"setting": "in-domain (joint training)", "test_domain": d, "system": OURS,
@@ -198,7 +181,6 @@ class Runner:
                 regression_metrics(self.test["lmp"], self.base_test[n], cfg)["pearson"], nan=-1))
             rows.append({"setting": "in-domain", "test_domain": d, "system": best_b,
                          **regression_metrics(self.test.loc[m, "lmp"], self.base_test.loc[m, best_b], cfg)})
-        # single-domain data (e.g. FrJUDGE = insurance): probe on the silver tenancy clauses instead
         if len(domains) == 1 and self.extra_silver is not None:
             other = self.extra_silver[self.extra_silver["domain"] != domains[0]]
             if len(other):
@@ -210,7 +192,6 @@ class Runner:
                 rows.append({"setting": f"out-of-domain {domains[0]}->{other['domain'].iloc[0]} (silver probe)",
                              "test_domain": other["domain"].iloc[0], "system": OURS,
                              **regression_metrics(other["lmp"], p["pred_score"], cfg)})
-        # train on one domain, test on the other (all clauses of the other domain are unseen)
         if len(domains) >= 2:
             for src in domains:
                 for tgt in domains:
@@ -232,7 +213,6 @@ class Runner:
         self._log("Experiment 3a - Legal-domain generalisation",
                   dom_table[["setting", "test_domain", "system", "pearson", "rmse", "mae", "over_%", "n"]])
 
-        # sentence-only vs contextual input (same split, same seeds)
         if not self.df["context"].fillna("").astype(str).str.strip().any():
             self._log("Experiment 3b - Sentence-only vs. contextual input", pd.DataFrame(),
                       "Skipped: this dataset has no context column (FrJUDGE pairs are isolated sentences).")
@@ -252,7 +232,6 @@ class Runner:
         self._log("Experiment 3b - Sentence-only vs. contextual input", ctx_table, note)
         return dom_table, ctx_table
 
-    # ------------------------------------------------------------------ Exp 4
     def exp4_sanity(self):
         cfg = self.cfg
         kinds = self.sanity_test["perturbation"].to_numpy()
@@ -269,10 +248,8 @@ class Runner:
                   "unrelated_<=1%: share of unrelated same-domain legal pairs scored <= 1% (higher is better).")
         return table
 
-    # ------------------------------------------------------------------ Exp 5
     def exp5_robustness_and_errors(self, n_cases: int = 20):
         cfg = self.cfg
-        # 5a perturbation robustness: score drop relative to the faithful version
         r = self.robust.copy()
         r[OURS] = self.pred_robust["pred_score"].to_numpy()
         for n in self.baseline_names:
@@ -287,7 +264,6 @@ class Runner:
                   drop_table, "Each row: mean(score of faithful simplification) - mean(score after the edit).")
         self._plot_robustness(drop.drop(index="[average drop]"))
 
-        # 5b legal error-type classification: model head vs. rule-based legal diff
         t = self.test.copy()
         if t["errors"].notna().any():
             model_m = error_type_metrics(t["errors"], self.pred_test, ERROR_TYPES)
@@ -299,7 +275,6 @@ class Runner:
             et.to_csv(os.path.join(cfg.output_dir, "exp5b_error_types.csv"), index=False)
             self._log("Experiment 5b - Legal error-type classification (P/R/F1)", et)
 
-        # 5c qualitative error analysis with explanations
         cases = self._select_cases(n_cases)
         out = []
         for _, c in cases.iterrows():
@@ -332,8 +307,6 @@ class Runner:
         return drop_table, qual
 
     def _select_cases(self, n):
-        """>= n legally difficult, diverse cases: one per error type (if labelled), then the largest model
-        errors spread over the gold-score range (low / mid / high), at most one case per clause."""
         t = self.test.copy()
         t["abs_err"] = (self.pred_test["pred_score"] - t["lmp"]).abs()
         t = t.sort_values("abs_err", ascending=False)
@@ -362,10 +335,7 @@ class Runner:
             take(idx)
         return t.loc[picked[:n]]
 
-    # ------------------------------------------------------------------ Exp 5d (improvement ablation)
     def exp5d_legal_edit_ablation(self):
-        """Does training on single legal edits of REAL pairs fix the weak spots (numbers, negation)?
-        Same seed(s), same split; only the extra training pairs differ."""
         cfg = self.cfg
         seeds = self.ablation_seeds
         aug_cfg = replace(cfg, legal_edit_aug=True)
@@ -400,7 +370,6 @@ class Runner:
         self.ablation_table = table
         return table
 
-    # ------------------------------------------------------------------ plots + report
     def _plot_scatter(self, y):
         try:
             import matplotlib.pyplot as plt

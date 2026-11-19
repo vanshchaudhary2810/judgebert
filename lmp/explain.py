@@ -1,4 +1,3 @@
-"""Explanations: Integrated-Gradients token attributions + rule-based legal evidence + error-type head."""
 from typing import Dict, List, Tuple
 
 import numpy as np
@@ -42,11 +41,6 @@ def _merge_subwords(tokens: List[str], scores: np.ndarray) -> List[Tuple[str, fl
 
 def integrated_gradients(model, tokenizer, original: str, simplified: str, cfg: Config,
                          context: str = "", steps: int = 32) -> Dict[str, List[Tuple[str, float]]]:
-    """Attribution of the LMP score to each word (Sundararajan et al., 2017).
-
-    Negative attribution = the word pushed the predicted preservation score DOWN.
-    Baseline = all-<pad> embeddings (special tokens kept).
-    """
     device = next(model.parameters()).device
     model.eval()
     a = first_input({"original": original, "context": context}, cfg)
@@ -74,7 +68,6 @@ def integrated_gradients(model, tokenizer, original: str, simplified: str, cfg: 
     attr = ((x - x0) * grads_total / steps).sum(-1)[0].detach().cpu().numpy()
 
     tokens = tokenizer.convert_ids_to_tokens(ids[0].tolist())
-    # find the segment boundary: second run of tokens after the first separator(s)
     sep_positions = [i for i, t in enumerate(tokens) if t in (tokenizer.sep_token, tokenizer.eos_token)]
     first_sep = sep_positions[0] if sep_positions else len(tokens) // 2
     spec = special.cpu().numpy()
@@ -89,7 +82,6 @@ def integrated_gradients(model, tokenizer, original: str, simplified: str, cfg: 
 def explain_pair(model, tokenizer, original: str, simplified: str, lang: str, cfg: Config,
                  domain: str = "", context: str = "", top_k: int = 5, err_thr: float = 0.5,
                  with_ig: bool = True, ig_steps: int = 32) -> Dict:
-    """Full system output for one pair: score, decision, error types, evidence and explanation."""
     row = pd.DataFrame([{"original": original, "simplified": simplified, "context": context,
                          "lang": lang, "domain": domain}])
     pred = predict(model, tokenizer, row, cfg).iloc[0]
@@ -103,7 +95,7 @@ def explain_pair(model, tokenizer, original: str, simplified: str, lang: str, cf
     if ig:
         neg_words = [w for w, s in sorted(ig["simplified"], key=lambda ws: ws[1])[:top_k] if s < 0]
 
-    decision = score_to_decision(score, cfg)      # always consistent with the score (paper's brackets)
+    decision = score_to_decision(score, cfg)
     lines = [f"LMP score: {score:.1f}/10 -> {decision}."]
     if model_errors:
         lines.append("Predicted legal error type(s): " + "; ".join(

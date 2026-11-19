@@ -20,10 +20,9 @@ For each original-simplified pair the system produces:
 3. Final run: `FAST_MODE = False` (3 seeds, mean ± std, about 1.5-2 h). When the team has scored the 180 translated test
    pairs, set `HUMAN_SCORES_CSV` to that file: English/Hindi test labels then come from our annotators.
 
-The notebook is self-contained (it writes the `lmp/` package with `%%writefile`), so it needs no upload.
+The notebook is self-contained, so it needs no upload.
 
 Locally: `pip install -r requirements.txt && python run_experiments.py [--human_csv data/x.csv] [--fast]`.
-CPU smoke test without downloads: `python tests/smoke_test.py`.
 
 ## Web app (frontend + backend)
 
@@ -100,11 +99,9 @@ lmp/
   generate.py     LLM simplification + annotation sheet
   frjudge.py      FrJUDGE loader, NLLB-200 translation, verification sheet
   demo.py         Gradio demo for the presentation
-JUDGEBERT_LMP_Colab.ipynb   self-contained Colab notebook (built by scripts/build_notebook.py)
+JUDGEBERT_LMP_Colab.ipynb   self-contained Colab notebook
 ANNOTATION_GUIDE.md         annotation procedure (bracket -> deduct -> error types)
 data/                       seed sources + annotation template
-tests/smoke_test.py         end-to-end CPU test with a tiny local model
-tests/frjudge_test.py       FrJUDGE + translation path test (fake translator)
 ```
 
 ## Reference

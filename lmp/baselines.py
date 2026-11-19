@@ -1,8 +1,3 @@
-"""Generic semantic-similarity baselines, all mapped to the 1-10 LMP scale (decimal scaling, as in the paper).
-
-Lexical : TF-IDF char n-gram cosine, chrF, BLEU
-Neural  : BERTScore-F1 (multilingual XLM-R, own implementation), SBERT multilingual, LaBSE
-"""
 from typing import Dict
 
 import numpy as np
@@ -19,7 +14,7 @@ def tfidf_char(df: pd.DataFrame) -> np.ndarray:
     vec = TfidfVectorizer(analyzer="char_wb", ngram_range=(2, 5), sublinear_tf=True)
     vec.fit(pd.concat([df["original"], df["simplified"]]).astype(str))
     A, B = vec.transform(df["original"].astype(str)), vec.transform(df["simplified"].astype(str))
-    sims = np.asarray(A.multiply(B).sum(1)).ravel()   # rows are L2-normalised -> dot = cosine
+    sims = np.asarray(A.multiply(B).sum(1)).ravel()
     return _to_scale(sims)
 
 
@@ -37,7 +32,6 @@ def bleu(df: pd.DataFrame) -> np.ndarray:
 
 @torch.no_grad()
 def bertscore_f1(df: pd.DataFrame, model_name="xlm-roberta-base", layer=9, batch_size=32) -> np.ndarray:
-    """BERTScore F1 (Zhang et al., 2019) without IDF, greedy cosine matching of contextual embeddings."""
     from transformers import AutoModel, AutoTokenizer
     dev = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     tok = AutoTokenizer.from_pretrained(model_name)
@@ -58,10 +52,10 @@ def bertscore_f1(df: pd.DataFrame, model_name="xlm-roberta-base", layer=9, batch
     for i in range(0, len(o), batch_size):
         ho, mo = embed(o[i:i + batch_size])
         hs, ms = embed(s[i:i + batch_size])
-        sim = torch.bmm(hs, ho.transpose(1, 2))                      # [B, Ls, Lo]
+        sim = torch.bmm(hs, ho.transpose(1, 2))
         sim = sim.masked_fill(~mo.unsqueeze(1), -2).masked_fill(~ms.unsqueeze(2), -2)
-        prec = (sim.max(2).values * ms).sum(1) / ms.sum(1).clamp(min=1)       # simplified -> original
-        rec = (sim.max(1).values * mo).sum(1) / mo.sum(1).clamp(min=1)        # original -> simplified
+        prec = (sim.max(2).values * ms).sum(1) / ms.sum(1).clamp(min=1)
+        rec = (sim.max(1).values * mo).sum(1) / mo.sum(1).clamp(min=1)
         f1 = 2 * prec * rec / (prec + rec).clamp(min=1e-8)
         out.append(f1.cpu().numpy())
     del model
@@ -80,7 +74,6 @@ def sbert_cosine(df: pd.DataFrame, model_name: str) -> np.ndarray:
 
 
 def run_baselines(df: pd.DataFrame, cfg, neural: bool = None) -> pd.DataFrame:
-    """Return a DataFrame (same index as df) with one 1-10 score column per baseline."""
     neural = cfg.run_neural_baselines if neural is None else neural
     res: Dict[str, np.ndarray] = {}
     res["TF-IDF(char)"] = tfidf_char(df)

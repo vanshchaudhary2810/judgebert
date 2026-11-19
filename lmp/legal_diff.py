@@ -1,13 +1,3 @@
-"""Rule-based legal change detector (English + Hindi).
-
-Compares the *legal signature* of the original and the simplified text:
-modality (obligation / permission / prohibition), negation, exceptions, conditions,
-quantifiers (scope), numbers/dates and legal parties (entities).
-
-It is used for
-  * human-readable evidence in the explanation of each prediction, and
-  * a transparent rule baseline for the legal-error-type classification (Exp. 5).
-"""
 import re
 from collections import Counter
 from typing import Dict, List
@@ -68,7 +58,6 @@ def _scope_words(text: str, lang: str) -> Counter:
     for p in LEX[lang]["scope"]:
         for m in re.findall(p, text, flags=re.I):
             out[m.lower().strip()] += 1
-    # normalise near-synonyms so original vs plain-language wording is not flagged
     norm = {"solely": "only", "in full": "full", "पूर्ण": "पूरा", "प्रत्येक": "हर", "किसी भी": "any", "कोई भी": "any",
             "each": "every"}
     return Counter({norm.get(k, k): v for k, v in out.items()})
@@ -99,13 +88,11 @@ def signature(text: str, lang: str) -> Dict:
 
 
 def legal_diff(original: str, simplified: str, lang: str) -> Dict:
-    """Return detected legal changes as {'findings': [...], 'error_types': set(...)}."""
-    if lang not in LEX:            # rules exist for English and Hindi only
+    if lang not in LEX:
         return {"findings": [], "error_types": set(), "orig_sig": {}, "simp_sig": {}}
     a, b = signature(original, lang), signature(simplified, lang)
     findings, types = [], set()
 
-    # numbers / dates
     missing = a["numbers"] - b["numbers"]
     added = b["numbers"] - a["numbers"]
     if missing or added:
@@ -113,12 +100,10 @@ def legal_diff(original: str, simplified: str, lang: str) -> Dict:
         findings.append(f"Numbers/dates differ: original has {sorted(missing.elements()) or '-'}, "
                         f"simplified has {sorted(added.elements()) or '-'}.")
 
-    # negation polarity
     if (a["negation"] % 2) != (b["negation"] % 2) or (a["negation"] > 0) != (b["negation"] > 0):
         types.add("contradiction")
         findings.append(f"Negation polarity changed ({a['negation']} negation(s) in original vs {b['negation']} in simplified).")
 
-    # modality
     if a["obligation"] > 0 and b["obligation"] == 0 and b["permission"] > 0:
         types.add("obligation_permission")
         findings.append("An obligation (shall/must) became a permission (may/can).")
@@ -136,7 +121,6 @@ def legal_diff(original: str, simplified: str, lang: str) -> Dict:
         types.add("condition")
         findings.append("A condition (if, where, in the event of ...) was dropped.")
 
-    # scope: flag a universal quantifier replaced by a restrictive one, or an added/removed "only"
     sa, sb = a["scope"], b["scope"]
     universal = {"any", "all", "every", "full", "either", "हर", "सभी", "पूरा"}
     restrictive = {"some", "partial", "part of", "first", "कुछ", "आंशिक"}
@@ -146,13 +130,11 @@ def legal_diff(original: str, simplified: str, lang: str) -> Dict:
         types.add("scope")
         findings.append(f"Scope changed: lost {sorted(lost) or '-'}, gained {sorted(gained) or '-'}.")
 
-    # entities / party roles: same parties, but a different party is mentioned first (role swap)
     ea, eb = a["entities"], b["entities"]
     if lang == "en" and ea and eb and set(ea) == set(eb) and len(set(ea)) > 1 and ea[0] != eb[0]:
         types.add("entity")
         findings.append(f"Party roles may be swapped: {ea} -> {eb}.")
 
-    # length-based omission / hallucination hints
     ratio = b["n_tokens"] / max(a["n_tokens"], 1)
     if ratio < 0.45:
         types.add("omission")

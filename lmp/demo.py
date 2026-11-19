@@ -1,4 +1,3 @@
-"""Interactive Gradio demo for presentations: paste an original + simplified clause, get the full output."""
 from .config import Config
 from .explain import explain_pair
 
@@ -10,7 +9,7 @@ def launch_demo(model, tokenizer, cfg: Config, share: bool = True, launch: bool 
         ex = explain_pair(model, tokenizer, original, simplified, lang, cfg)
         attr = ex["attributions"]["simplified"] if ex["attributions"] else []
         m = max([abs(s) for _, s in attr] + [1e-9])
-        highlighted = [(w + " ", round(float(s) / m, 3)) for w, s in attr]   # in [-1, 1] for colouring
+        highlighted = [(w + " ", round(float(s) / m, 3)) for w, s in attr]
         probs = {k: v for k, v in ex["error_probs"].items()}
         return f"{ex['lmp_score']:.1f} / 10", ex["decision"], probs, highlighted, ex["explanation"]
 

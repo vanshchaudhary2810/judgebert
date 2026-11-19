@@ -9,4 +9,4 @@ numpy>=1.24
 krippendorff>=0.6
 tabulate>=0.9
 matplotlib>=3.7
-gradio>=4.0      # optional, for the demo
+gradio>=4.0

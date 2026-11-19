@@ -1,5 +1,4 @@
 #!/bin/bash
-# Start the Legal Meaning Checker web app on http://localhost:8000
 cd "$(dirname "$0")"
 if [ ! -f models/lmp_model/lmp_model.pt ]; then
   echo "Trained model not found at models/lmp_model/lmp_model.pt"

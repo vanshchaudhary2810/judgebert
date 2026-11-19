@@ -1,13 +1,3 @@
-"""Backend: FastAPI server for the Legal Meaning Preservation checker.
-
-Run from the repository root:
-    python -m uvicorn app.server:app --port 8000
-then open http://localhost:8000
-
-Environment variables:
-    LMP_MODEL_DIR   folder of the trained model (default: models/lmp_model)
-    LMP_IG_STEPS    Integrated-Gradients steps for word attributions (default 16; lower = faster)
-"""
 import io
 import json
 import os
@@ -37,7 +27,7 @@ MAX_CHARS = 3000
 MAX_BATCH_ROWS = 500
 
 STATE = {"model": None, "tokenizer": None, "cfg": None, "device": None, "error": None, "load_seconds": None}
-LOCK = threading.Lock()          # one inference at a time (keeps memory flat on a laptop)
+LOCK = threading.Lock()
 
 ERROR_LABELS = {
     "omission": "Omission", "hallucination": "Added fact", "contradiction": "Contradiction",
@@ -92,7 +82,7 @@ def load():
     cfg = Config(device=dev)
     try:
         model, tok = load_model(MODEL_DIR, cfg)
-    except Exception as e:                       # e.g. an unsupported op on Apple GPU -> fall back to CPU
+    except Exception as e:
         if dev != "cpu":
             dev, cfg = "cpu", Config(device="cpu")
             model, tok = load_model(MODEL_DIR, cfg)
@@ -170,7 +160,7 @@ def analyze(p: PairIn):
         except RuntimeError:
             if STATE["device"] == "cpu":
                 raise
-            fall_back_to_cpu()                    # an op unsupported on the Apple GPU: continue on CPU
+            fall_back_to_cpu()
             model, cfg = STATE["model"], STATE["cfg"]
             ex = explain_pair(model, tok, orig, simp, lang, cfg, with_ig=p.explain_words, ig_steps=IG_STEPS)
     elapsed = time.time() - t0

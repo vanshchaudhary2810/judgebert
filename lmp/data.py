@@ -1,4 +1,3 @@
-"""Loading human-annotated data, aggregating annotators, splitting and augmentation."""
 import re
 from typing import Optional, Tuple
 
@@ -13,23 +12,16 @@ REQUIRED = ["lang", "domain", "original", "simplified"]
 
 
 def krippendorff_alpha(df: pd.DataFrame, cols) -> float:
-    """Interval Krippendorff's alpha over annotator columns (NaN = not annotated)."""
     try:
         import krippendorff
         data = df[cols].T.to_numpy(dtype=float)
         return float(krippendorff.alpha(reliability_data=data, level_of_measurement="interval"))
-    except Exception as e:  # pragma: no cover
+    except Exception as e:
         print("krippendorff not available:", e)
         return float("nan")
 
 
 def load_annotated_csv(path: str) -> pd.DataFrame:
-    """Load the human-annotated dataset (see annotation_template.csv).
-
-    Columns: pair_id, source_id, lang, domain, context, original, simplified,
-             annotator_1 ... annotator_k (1-10), errors (optional, ';'-separated), notes
-    The gold LMP is the mean of the annotator columns (as in the JUDGEBERT paper).
-    """
     df = pd.read_csv(path)
     missing = [c for c in REQUIRED if c not in df.columns]
     if missing:
@@ -52,7 +44,7 @@ def load_annotated_csv(path: str) -> pd.DataFrame:
     if "context" not in df.columns:
         df["context"] = ""
     if "errors" not in df.columns:
-        df["errors"] = np.nan          # NaN = error labels unknown -> masked in the loss
+        df["errors"] = np.nan
     df["context"] = df["context"].fillna("")
     df["perturbation"] = df.get("perturbation", "human")
     df["is_sanity"] = False
@@ -61,7 +53,6 @@ def load_annotated_csv(path: str) -> pd.DataFrame:
 
 
 def prepare_data(cfg: Config, human_csv: Optional[str] = None, silver_seed: int = 13) -> pd.DataFrame:
-    """Main dataset: human CSV if given, otherwise the silver seed dataset."""
     if human_csv:
         df = load_annotated_csv(human_csv)
         print(f"Loaded {len(df)} human-annotated pairs.")
@@ -72,13 +63,7 @@ def prepare_data(cfg: Config, human_csv: Optional[str] = None, silver_seed: int 
 
 
 def split_data(df: pd.DataFrame, cfg: Config, seed: int = 42) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    """Grouped split: all variants of one clause (and its translation) stay in the same split.
-
-    The JUDGEBERT paper split instances randomly; grouping avoids leakage where a perturbed
-    copy of a test clause appears in training.
-    """
     if "split" in df.columns and df["split"].notna().all() and {"train", "test"} <= set(df["split"]):
-        # explicit split (e.g. the official FrJUDGE train/dev/test); translations share their pair's split
         parts = [df[df["split"] == k].reset_index(drop=True) for k in ("train", "val", "test")]
         if len(parts[1]) == 0:
             parts[1] = parts[0].sample(frac=0.1, random_state=seed)
@@ -98,7 +83,6 @@ def split_data(df: pd.DataFrame, cfg: Config, seed: int = 42) -> Tuple[pd.DataFr
 
 
 def augment(train: pd.DataFrame, cfg: Config, extra_silver: Optional[pd.DataFrame] = None) -> pd.DataFrame:
-    """Add identical (10) / unrelated (1) sanity pairs built ONLY from training clauses (JUDGEBERT-DA)."""
     parts = [train]
     if cfg.data_augmentation:
         parts.append(build_sanity_pairs(train, seed=11))
@@ -108,7 +92,6 @@ def augment(train: pd.DataFrame, cfg: Config, extra_silver: Optional[pd.DataFram
 
 
 def errors_to_multihot(value, error_types) -> Tuple[np.ndarray, float]:
-    """Returns (multi-hot vector, mask). mask=0 when error labels are unknown (NaN)."""
     vec = np.zeros(len(error_types), dtype=np.float32)
     if value is None or (isinstance(value, float) and np.isnan(value)):
         return vec, 0.0

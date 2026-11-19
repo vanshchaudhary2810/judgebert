@@ -1,16 +1,3 @@
-"""FrJUDGE (Beauchemin et al., EMNLP 2025): the only human-annotated legal-meaning-preservation dataset.
-
-297 French insurance clause / GPT-4 simplification pairs, each rated 1-10 by 5 law students, with
-free-text justifications. License: CC-BY-NC-SA 4.0 (academic, non-commercial use with attribution).
-
-We use it in three ways:
-  1. replication of JUDGEBERT with a multilingual encoder on the official train/dev/test split;
-  2. source-language training data for cross-lingual transfer to English and Hindi;
-  3. "translate-and-project": NLLB-200 translations to English + Hindi that inherit the French human
-     label (pair-level). These projected labels are noisy by design; a subset is re-scored by our own
-     annotators, which yields our human-annotated English/Hindi set AND measures how well legal
-     meaning judgments survive translation.
-"""
 import os
 import subprocess
 from typing import List, Optional
@@ -23,7 +10,6 @@ NLLB_CODES = {"fr": "fra_Latn", "en": "eng_Latn", "hi": "hin_Deva"}
 
 
 def download_frjudge(dest: str = "external/JUDGEBERT") -> str:
-    """Shallow-clone the authors' repository (data lives in datastore/). Returns the datastore path."""
     if not os.path.isdir(dest):
         os.makedirs(os.path.dirname(dest) or ".", exist_ok=True)
         subprocess.run(["git", "clone", "-q", "--depth", "1", REPO, dest], check=True)
@@ -31,7 +17,6 @@ def download_frjudge(dest: str = "external/JUDGEBERT") -> str:
 
 
 def load_frjudge(datastore: str) -> pd.DataFrame:
-    """One row per pair with the official split, 5 annotator scores, mean LMP and justifications."""
     rel = pd.read_json(os.path.join(datastore, "released", "FrJUDGE.jsonl"), lines=True)
     rel["k"] = rel.groupby(["original", "simplification"]).cumcount() + 1
     scores = rel.pivot_table(index=["original", "simplification"], columns="k", values="legal_meaning")
@@ -49,18 +34,17 @@ def load_frjudge(datastore: str) -> pd.DataFrame:
     df["split"] = [split_of.get((o, p), "train") for o, p in zip(df["original"], df["simplification"])]
 
     df = df.rename(columns={"simplification": "simplified"})
-    df["concept_id"] = [f"FR{i:03d}" for i in range(len(df))]     # translations share this id -> same split
+    df["concept_id"] = [f"FR{i:03d}" for i in range(len(df))]
     df["source_id"] = df["concept_id"] + "-fr"
     df["pair_id"] = df["source_id"]
     df["lang"], df["domain"], df["context"] = "fr", "insurance", ""
-    df["errors"] = np.nan              # FrJUDGE has no error-type labels -> masked in the loss
+    df["errors"] = np.nan
     df["perturbation"], df["is_sanity"], df["label_source"] = "human", False, "human"
     return df
 
 
 def nllb_translate(texts: List[str], src: str, tgt: str, model_name: str = "facebook/nllb-200-distilled-600M",
                    batch_size: int = 16, max_new_tokens: int = 256) -> List[str]:
-    """Translate with NLLB-200 (Colab T4: ~1-2 min per 600 sentences)."""
     import torch
     from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
     dev = "cuda" if torch.cuda.is_available() else "cpu"
@@ -84,10 +68,6 @@ def nllb_translate(texts: List[str], src: str, tgt: str, model_name: str = "face
 
 def translate_frjudge(fr: pd.DataFrame, langs=("en", "hi"), cache_dir: str = "data",
                       translator=nllb_translate) -> pd.DataFrame:
-    """Translate original + simplification of every FrJUDGE pair; the French human label is projected.
-
-    Results are cached to data/frjudge_<lang>.csv so translation runs only once.
-    """
     parts = []
     for lang in langs:
         path = os.path.join(cache_dir, f"frjudge_{lang}.csv")
@@ -105,7 +85,7 @@ def translate_frjudge(fr: pd.DataFrame, langs=("en", "hi"), cache_dir: str = "da
             t["lang"] = lang
             t["source_id"] = t["concept_id"] + f"-{lang}"
             t["pair_id"] = t["source_id"]
-            t["label_source"] = "projected"     # label inherited from the French human judgments
+            t["label_source"] = "projected"
             os.makedirs(cache_dir, exist_ok=True)
             t.to_csv(path, index=False, encoding="utf-8")
         t["errors"] = np.nan
@@ -116,7 +96,6 @@ def translate_frjudge(fr: pd.DataFrame, langs=("en", "hi"), cache_dir: str = "da
 
 def frjudge_dataset(mode: str = "frjudge_xling", datastore: Optional[str] = None, cache_dir: str = "data",
                     translator=nllb_translate) -> pd.DataFrame:
-    """mode='frjudge' -> French only; 'frjudge_xling' -> French + projected English + Hindi."""
     datastore = datastore or download_frjudge()
     fr = load_frjudge(datastore)
     if mode == "frjudge":
@@ -129,12 +108,6 @@ def frjudge_dataset(mode: str = "frjudge_xling", datastore: Optional[str] = None
 
 def make_verification_sheet(xling: pd.DataFrame, path: str, n_per_lang: int = 90, n_annotators: int = 3,
                             seed: int = 0) -> pd.DataFrame:
-    """Annotation sheet of translated pairs for our team to re-score in English / Hindi.
-
-    Takes the official TEST split first (90 pairs per language), so the human EN/HI scores are on pairs the
-    model never trains on; tops up with val/train pairs if n_per_lang > 90. The projected (French) label is
-    kept in `projected_lmp` - hide that column from annotators.
-    """
     rows = []
     for lang in ("en", "hi"):
         d = xling[xling["lang"] == lang]
@@ -155,11 +128,6 @@ def make_verification_sheet(xling: pd.DataFrame, path: str, n_per_lang: int = 90
 
 
 def apply_human_scores(xling: pd.DataFrame, annotated_csv: str):
-    """Replace projected English/Hindi labels with our team's human scores (annotated verification sheet).
-
-    Uses the mean of annotator_1..k per pair; pairs marked translation_ok = no are dropped (broken
-    translation, not a simplification error). Returns (updated dataframe, agreement table).
-    """
     import re
     from scipy.stats import pearsonr
     from .data import krippendorff_alpha
@@ -184,7 +152,6 @@ def apply_human_scores(xling: pd.DataFrame, annotated_csv: str):
     out.loc[hit, "lmp"] = out.loc[hit, "pair_id"].map(hmap)
     out.loc[hit, "label_source"] = "human"
     if "errors" in ann and ann["errors"].astype(str).str.strip().replace("nan", "").ne("").any():
-        # the team labelled error types: an empty cell on an annotated pair means "no error" (known)
         emap = {p: (e.strip() if isinstance(e, str) else "") for p, e in zip(ann["pair_id"], ann["errors"])}
         out["errors"] = out["errors"].astype(object)
         out.loc[hit, "errors"] = out.loc[hit, "pair_id"].map(emap).fillna("")
